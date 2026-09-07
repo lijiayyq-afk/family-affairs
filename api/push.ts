@@ -1,3 +1,5 @@
+declare const process: any;
+
 export default async function handler(req: any, res: any) {
   // 允许跨域与预检
   res.setHeader('Access-Control-Allow-Credentials', 'true');
