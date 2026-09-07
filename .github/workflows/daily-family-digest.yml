@@ -1,0 +1,37 @@
+name: Daily Family Affairs Digest
+
+on:
+  schedule:
+    # 每天北京时间早晨 08:00 (UTC 00:00) 自动触发
+    - cron: '0 0 * * *'
+  # 支持手动在 GitHub 页面点击 Run workflow 测试
+  workflow_dispatch:
+
+jobs:
+  push-wechat-digest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send WeChat Digest via PushPlus
+        env:
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+        run: |
+          if [ -z "$PUSHPLUS_TOKEN" ]; then
+            echo "Error: PUSHPLUS_TOKEN secret is not set!"
+            exit 1
+          fi
+
+          echo "Sending Daily Family Digest via PushPlus..."
+          CURRENT_DATE=$(date -d "+8 hours" "+%Y年%m月%d日")
+
+          CONTENT="<h3>☀️ 亲邻记事 · 今日家庭事务提醒</h3><p>今天是 $CURRENT_DATE，记得打开家庭事务看板查看各成员今天待办事项，祝全家度过充实顺利的一天！</p><p><a href='https://your-domain.pages.dev' style='color:#2563eb;'>👉 点击进入家庭事务管理网站</a></p>"
+
+          curl -s -X POST https://www.pushplus.plus/send \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"token\": \"$PUSHPLUS_TOKEN\",
+              \"title\": \"【家庭事务早报】新的一天待办已就绪\",
+              \"content\": \"$CONTENT\",
+              \"template\": \"html\"
+            }"
+
+          echo "Done."
