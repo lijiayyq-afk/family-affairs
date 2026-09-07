@@ -1,25 +1,19 @@
-import { AffairItem, Member } from '../types';
+import { TodoItem } from '../types';
 import { formatHumanDate } from '../utils/dateUtils';
 
 export class PushPlusService {
   private static DIRECT_URL = 'https://www.pushplus.plus/send';
 
-  /**
-   * 获取生效的 Token（优先环境变量，其次手动设置）
-   */
   static getEffectiveToken(manualToken?: string): string {
     const envToken = (import.meta as any).env?.VITE_PUSHPLUS_TOKEN;
     if (envToken && envToken.trim()) return envToken.trim();
     return manualToken?.trim() || '';
   }
 
-  /**
-   * 发送通知：优先走 Vercel 自身部署的 /api/push 路由，服务端环境变量自动托管；若失败则直连 PushPlus
-   */
   static async send(token: string, title: string, content: string): Promise<{ ok: boolean; msg: string }> {
     const effectiveToken = this.getEffectiveToken(token);
 
-    // 1. 优先尝试请求 Vercel Serverless /api/push 路由
+    // 优先尝试 Vercel /api/push
     try {
       const serverRes = await fetch('/api/push', {
         method: 'POST',
@@ -38,12 +32,11 @@ export class PushPlusService {
         }
       }
     } catch {
-      // 忽略服务路由失败，继续降级到直连
+      // 忽略降级
     }
 
-    // 2. 降级：客户端直连 PushPlus 官方 API
     if (!effectiveToken) {
-      return { ok: false, msg: '未配置 Token，可在 Vercel 环境变量或设置中添加 PUSHPLUS_TOKEN' };
+      return { ok: false, msg: '未配置 Token，可在设置中填入' };
     }
 
     try {
@@ -68,69 +61,53 @@ export class PushPlusService {
     }
   }
 
-  /**
-   * 发送单项事务微信提醒
-   */
-  static async sendItemReminder(item: AffairItem, member?: Member, token?: string) {
-    const humanDate = formatHumanDate(item.date).label;
-    const memberName = member?.name || '全家';
-
+  static async sendItem(item: TodoItem, token?: string) {
+    const dateLabel = formatHumanDate(item.date).label;
     const html = `
-      <div style="font-family: -apple-system, sans-serif; padding: 18px; border: 1px solid #e5e5e5; border-radius: 12px; background: #fff;">
-        <div style="font-size: 13px; color: #888; margin-bottom: 6px;">🏡 家庭事务提醒 · ${item.category}</div>
-        <h3 style="font-size: 17px; color: #1a1a1a; margin: 0 0 12px 0;">${item.title}</h3>
-        <div style="background: #f8f8f7; padding: 12px; border-radius: 8px; font-size: 14px; line-height: 1.8; color: #444;">
-          <div>👤 <b>成员：</b>${memberName}</div>
-          <div>📅 <b>日期：</b>${humanDate} (${item.date})</div>
-          ${item.priority === 'urgent' ? '<div style="color: #e11d48;">🚨 <b>级别：</b>紧急办理</div>' : ''}
-          ${item.note ? `<div style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed #ddd;">📝 <b>备注：</b>${item.note}</div>` : ''}
+      <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 20px; border: 1px solid #eaeaea; border-radius: 12px; background: #fff;">
+        <div style="font-size: 13px; color: #888; margin-bottom: 8px;">🏡 家庭事务提醒</div>
+        <h2 style="font-size: 18px; color: #111; margin: 0 0 14px 0;">${item.title}</h2>
+        <div style="background: #fafafa; padding: 12px 16px; border-radius: 8px; font-size: 14px; line-height: 1.8; color: #444;">
+          <div>👤 <b>关联家人：</b>${item.member}</div>
+          <div>📅 <b>执行日期：</b>${dateLabel} (${item.date})</div>
         </div>
       </div>
     `;
 
-    return this.send(token || '', `【待办提醒】${memberName}：${item.title}`, html);
+    return this.send(token || '', `【家庭提醒】${item.member}：${item.title}`, html);
   }
 
-  /**
-   * 生成并发送今日早报
-   */
-  static async sendDailyDigest(items: AffairItem[], members: Member[], token?: string) {
-    const memberMap = new Map(members.map((m) => [m.id, m]));
+  static async sendTodayDigest(todos: TodoItem[], token?: string) {
     const today = new Date().toISOString().slice(0, 10);
+    const todayTodos = todos.filter((t) => !t.done && t.date === today);
+    const overdueTodos = todos.filter((t) => !t.done && t.date < today);
 
-    const todayItems = items.filter((i) => !i.done && i.date === today);
-    const overdueItems = items.filter((i) => !i.done && i.date < today);
-
-    let listHtml = '';
-
-    if (overdueItems.length > 0) {
-      listHtml += `<div style="color: #e11d48; font-weight: bold; margin-bottom: 8px;">⚠️ 逾期未办 (${overdueItems.length}件)：</div>`;
-      overdueItems.forEach((i) => {
-        const m = memberMap.get(i.memberId);
-        listHtml += `<div style="margin-bottom: 6px; font-size: 13px; color: #9f1239;">• <b>[${m?.name || '全家'}]</b> ${i.title} (${i.date})</div>`;
-      });
-      listHtml += '<hr style="border: none; border-top: 1px solid #eee; margin: 12px 0;" />';
-    }
-
-    listHtml += `<div style="font-weight: bold; color: #1a1a1a; margin-bottom: 8px;">📌 今日事务 (${todayItems.length}件)：</div>`;
-    if (todayItems.length === 0) {
-      listHtml += '<div style="color: #666; font-size: 13px;">今天暂无安排，轻松愉快！</div>';
-    } else {
-      todayItems.forEach((i) => {
-        const m = memberMap.get(i.memberId);
-        listHtml += `<div style="margin-bottom: 8px; font-size: 14px; color: #222;">• <b>[${m?.name || '全家'}]</b> ${i.title} <span style="color: #888; font-size: 12px;">(${i.category})</span></div>`;
-      });
-    }
-
-    const content = `
-      <div style="font-family: -apple-system, sans-serif; padding: 18px; border: 1px solid #e5e5e5; border-radius: 12px; background: #fff;">
-        <h3 style="margin-top: 0; color: #1a1a1a;">☀️ 今日家庭事务早报</h3>
-        <div style="background: #fafaf9; padding: 14px; border-radius: 8px;">
-          ${listHtml}
-        </div>
-      </div>
+    let html = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 20px; border: 1px solid #eaeaea; border-radius: 12px; background: #fff;">
+        <h3 style="margin-top: 0; color: #111; font-size: 18px;">☀️ 今日家庭事务清单</h3>
     `;
 
-    return this.send(token || '', `【家庭早报】今日待办 ${todayItems.length} 件`, content);
+    if (overdueTodos.length > 0) {
+      html += `<div style="color: #e11d48; font-weight: bold; margin-bottom: 6px;">⚠️ 逾期未完成 (${overdueTodos.length}件)：</div><ul style="padding-left: 20px; margin-bottom: 14px; color: #9f1239;">`;
+      overdueTodos.forEach((t) => {
+        html += `<li><b>[${t.member}]</b> ${t.title} (${t.date})</li>`;
+      });
+      html += `</ul>`;
+    }
+
+    html += `<div style="color: #333; font-weight: bold; margin-bottom: 6px;">📌 今日待办 (${todayTodos.length}件)：</div>`;
+    if (todayTodos.length === 0) {
+      html += `<p style="color: #888; font-size: 14px;">今天暂无待办，好好放松一下！</p>`;
+    } else {
+      html += `<ul style="padding-left: 20px; color: #222;">`;
+      todayTodos.forEach((t) => {
+        html += `<li><b>[${t.member}]</b> ${t.title}</li>`;
+      });
+      html += `</ul>`;
+    }
+
+    html += `</div>`;
+
+    return this.send(token || '', `【家庭清单】今日需办 ${todayTodos.length} 件`, html);
   }
 }

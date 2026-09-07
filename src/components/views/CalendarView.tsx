@@ -3,56 +3,43 @@ import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import listPlugin from '@fullcalendar/list';
 import interactionPlugin from '@fullcalendar/interaction';
-import { AffairItem, Member } from '../../types';
+import { TodoItem } from '../../types';
+import { MEMBER_COLORS } from '../../constants/initialData';
 
 interface CalendarViewProps {
-  affairs: AffairItem[];
-  members: Member[];
+  todos: TodoItem[];
   onSelectDate: (dateStr: string) => void;
-  onSelectEvent: (item: AffairItem) => void;
+  onSelectEvent: (item: TodoItem) => void;
 }
 
 export const CalendarView: React.FC<CalendarViewProps> = ({
-  affairs,
-  members,
+  todos,
   onSelectDate,
   onSelectEvent,
 }) => {
-  const memberMap = useMemo(() => new Map(members.map((m) => [m.id, m])), [members]);
-
   const events = useMemo(() => {
-    return affairs.map((item) => {
-      const member = memberMap.get(item.memberId);
+    return todos.map((item) => {
+      const color = MEMBER_COLORS[item.member] || { bg: '#27272a', text: '#fff' };
       return {
         id: item.id,
-        title: `${member?.name ? member.name + ' · ' : ''}${item.title}`,
+        title: `${item.member} · ${item.title}`,
         start: item.date,
         allDay: true,
-        backgroundColor: item.done ? '#a8a29e' : (member?.color || '#292524'),
-        borderColor: item.done ? '#a8a29e' : (member?.color || '#292524'),
-        textColor: '#ffffff',
+        backgroundColor: item.done ? '#d4d4d8' : color.bg,
+        borderColor: item.done ? '#d4d4d8' : '#e4e4e7',
+        textColor: item.done ? '#71717a' : color.text,
         extendedProps: { raw: item },
       };
     });
-  }, [affairs, memberMap]);
+  }, [todos]);
 
   return (
-    <div className="max-w-4xl mx-auto space-y-4">
-      {/* 提示 */}
-      <div className="flex items-center justify-between text-xs text-stone-400 px-1">
-        <span>点击日历空白日期即可添加待办，点击事项可查看详情</span>
-        <div className="flex items-center gap-3">
-          {members.slice(0, 5).map((m) => (
-            <div key={m.id} className="flex items-center gap-1">
-              <span style={{ backgroundColor: m.color }} className="w-2 h-2 rounded-full inline-block"></span>
-              <span>{m.name}</span>
-            </div>
-          ))}
-        </div>
+    <div className="max-w-3xl mx-auto space-y-3">
+      <div className="text-xs text-zinc-400 px-1">
+        点击日历日期可快速记事，点击事项可修改或删除
       </div>
 
-      {/* 日历卡片 */}
-      <div className="bg-white rounded-2xl p-4 sm:p-6 border border-stone-200/80 shadow-xs">
+      <div className="bg-white rounded-2xl p-4 sm:p-5 border border-zinc-200/90 shadow-2xs">
         <FullCalendar
           plugins={[dayGridPlugin, listPlugin, interactionPlugin]}
           initialView="dayGridMonth"
@@ -65,7 +52,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           buttonText={{
             today: '今天',
             month: '月历',
-            list: '列表',
+            list: '清单',
           }}
           events={events}
           dateClick={(info: any) => onSelectDate(info.dateStr)}

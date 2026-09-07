@@ -1,34 +1,22 @@
-// 家庭成员
-export interface Member {
-  id: string;
-  name: string;
-  relation: string;     // 关系/称谓
-  color: string;        // 标志色
-  avatarType: 'emoji' | 'image';
-  avatarValue: string;  // emoji 字符或照片 Base64
-}
+// 预置 6 位核心家庭成员
+export const MEMBERS = ['我', '配偶', '小宝', '大宝', '爷爷', '奶奶'] as const;
+export type FamilyMember = typeof MEMBERS[number];
 
-// 核心事务（精确到天，极其精炼，无冗余时间维度）
-export interface AffairItem {
+// 极简待办事项（无冗余周期、无冗余分类，只有纯粹的生活待办）
+export interface TodoItem {
   id: string;
   title: string;
-  note?: string;         // 备注细节
-  memberId: string;      // 责任人
-  category: string;      // 分类：就医、缴费、采购、教育、杂事
-  date: string;          // 执行日期：YYYY-MM-DD
-  priority?: 'urgent' | 'normal'; // 仅保留常规与紧急
-  recurring?: 'none' | 'weekly' | 'monthly' | 'yearly';
-  remindWechat?: boolean; // 是否发送微信提醒
+  member: FamilyMember;
+  date: string; // YYYY-MM-DD
   done: boolean;
-  completedAt?: string;
+  remindWechat?: boolean;
   createdAt: string;
 }
 
-// PushPlus 微信配置
+// PushPlus 微信推送配置
 export interface PushPlusConfig {
   token: string;
-  topic?: string;
 }
 
-// 视图模式：待办、日历、家庭
-export type ViewTab = 'todos' | 'calendar' | 'family';
+// 主视图：待办列表 | 日历视图
+export type ActiveTab = 'todos' | 'calendar';
