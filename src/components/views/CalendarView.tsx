@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { TodoItem } from '../../types';
 import { MEMBER_COLORS } from '../../constants/initialData';
-import { formatHumanDate } from '../../utils/dateUtils';
+import { formatHumanDate, getDateRangeDays, formatTodoDateRange } from '../../utils/dateUtils';
 import {
   format,
   addMonths,
@@ -50,12 +50,18 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     return eachDayOfInterval({ start: startDate, end: endDate });
   }, [currentMonth]);
 
-  // 按日期建立映射，计算每天有哪些事务
+  // 按日期建立映射，支持单日与连续多天时间段（每天均显示对应事项）
   const todosByDate = useMemo(() => {
     const map: Record<string, TodoItem[]> = {};
     todos.forEach((t) => {
-      if (!map[t.date]) map[t.date] = [];
-      map[t.date].push(t);
+      const daysInRange = getDateRangeDays(t.date, t.endDate);
+      daysInRange.forEach((dayStr) => {
+        if (!map[dayStr]) map[dayStr] = [];
+        // 避免重复
+        if (!map[dayStr].some((item) => item.id === t.id)) {
+          map[dayStr].push(t);
+        }
+      });
     });
     return map;
   }, [todos]);
@@ -253,13 +259,20 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                       )}
                     </button>
 
-                    <span
-                      className={`text-sm font-medium truncate ${
-                        item.done ? 'line-through text-zinc-400' : 'text-zinc-800'
-                      }`}
-                    >
-                      {item.title}
-                    </span>
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <span
+                        className={`text-sm font-medium truncate ${
+                          item.done ? 'line-through text-zinc-400' : 'text-zinc-800'
+                        }`}
+                      >
+                        {item.title}
+                      </span>
+                      {item.endDate && item.endDate > item.date && (
+                        <span className="text-[10px] text-zinc-400 font-normal mt-0.5">
+                          🗓️ 连续跨期 ({item.date.slice(5)} ~ {item.endDate.slice(5)})
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">

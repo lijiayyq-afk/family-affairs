@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { TodoItem } from '../../types';
 import { MEMBER_COLORS } from '../../constants/initialData';
-import { formatHumanDate } from '../../utils/dateUtils';
+import { formatTodoDateRange } from '../../utils/dateUtils';
 import { Check, Circle, Trash2, Bell, Plus } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -29,10 +29,23 @@ export const TodoView: React.FC<TodoViewProps> = ({
   const activeTodos = todos.filter((t) => !t.done);
   const doneTodos = todos.filter((t) => t.done);
 
-  // 未完成按日期分类：逾期、今天、未来
-  const overdueTodos = activeTodos.filter((t) => t.date < todayStr).sort((a, b) => a.date.localeCompare(b.date));
-  const todayTodos = activeTodos.filter((t) => t.date === todayStr);
-  const upcomingTodos = activeTodos.filter((t) => t.date > todayStr).sort((a, b) => a.date.localeCompare(b.date));
+  // 逾期：跨期全部结束且在今天之前
+  const overdueTodos = activeTodos
+    .filter((t) => (t.endDate || t.date) < todayStr)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  // 今天 / 正在进行中：单日为今天，或今天落在开始与结束之间
+  const todayTodos = activeTodos.filter((t) => {
+    if (t.endDate && t.endDate > t.date) {
+      return t.date <= todayStr && todayStr <= t.endDate;
+    }
+    return t.date === todayStr;
+  });
+
+  // 接下来：未来才开始的事项
+  const upcomingTodos = activeTodos
+    .filter((t) => t.date > todayStr)
+    .sort((a, b) => a.date.localeCompare(b.date));
 
   const handleCheck = (e: React.MouseEvent, item: TodoItem) => {
     e.stopPropagation();
@@ -47,7 +60,7 @@ export const TodoView: React.FC<TodoViewProps> = ({
   };
 
   const renderTodoRow = (item: TodoItem) => {
-    const dateInfo = formatHumanDate(item.date);
+    const dateInfo = formatTodoDateRange(item.date, item.endDate);
 
     return (
       <div

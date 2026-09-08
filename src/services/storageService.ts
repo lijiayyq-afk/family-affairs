@@ -24,12 +24,14 @@ function normalizeTodos(items: any[]): TodoItem[] {
         ? item.members 
         : item.member ? [item.member] : ['我'],
       date: item.date || new Date().toISOString().slice(0, 10),
+      endDate: item.endDate && item.endDate > (item.date || '') ? item.endDate : undefined,
       done: Boolean(item.done),
       remindWechat: Boolean(item.remindWechat),
       createdAt: item.createdAt || new Date().toISOString(),
     };
   });
 }
+
 
 export class StorageService {
   /**

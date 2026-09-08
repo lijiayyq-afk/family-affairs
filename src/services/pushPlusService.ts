@@ -1,5 +1,5 @@
 import { TodoItem } from '../types';
-import { formatHumanDate } from '../utils/dateUtils';
+import { formatTodoDateRange } from '../utils/dateUtils';
 import { APP_CONFIG } from '../config';
 
 export class PushPlusService {
@@ -66,7 +66,10 @@ export class PushPlusService {
   }
 
   static async sendItem(item: TodoItem) {
-    const dateLabel = formatHumanDate(item.date).label;
+    const dateRangeInfo = formatTodoDateRange(item.date, item.endDate);
+    const dateDesc = item.endDate && item.endDate > item.date 
+      ? `${item.date} ~ ${item.endDate} (${dateRangeInfo.label})`
+      : `${item.date} (${dateRangeInfo.label})`;
     const membersText = item.members && item.members.length > 0 ? item.members.join('、') : '全家';
 
     const html = `
@@ -75,7 +78,7 @@ export class PushPlusService {
         <h2 style="font-size: 18px; color: #111; margin: 0 0 14px 0;">${item.title}</h2>
         <div style="background: #fafafa; padding: 12px 16px; border-radius: 8px; font-size: 14px; line-height: 1.8; color: #444;">
           <div>👥 <b>关联家人：</b>${membersText}</div>
-          <div>📅 <b>办理日期：</b>${dateLabel} (${item.date})</div>
+          <div>📅 <b>办理时间：</b>${dateDesc}</div>
         </div>
       </div>
     `;
@@ -85,8 +88,14 @@ export class PushPlusService {
 
   static async sendTodayDigest(todos: TodoItem[]) {
     const today = new Date().toISOString().slice(0, 10);
-    const todayTodos = todos.filter((t) => !t.done && t.date === today);
-    const overdueTodos = todos.filter((t) => !t.done && t.date < today);
+    const todayTodos = todos.filter((t) => {
+      if (t.done) return false;
+      if (t.endDate && t.endDate > t.date) {
+        return t.date <= today && today <= t.endDate;
+      }
+      return t.date === today;
+    });
+    const overdueTodos = todos.filter((t) => !t.done && (t.endDate || t.date) < today);
 
     let html = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 20px; border: 1px solid #eaeaea; border-radius: 12px; background: #fff;">
@@ -97,22 +106,25 @@ export class PushPlusService {
       html += `<div style="color: #e11d48; font-weight: bold; margin-bottom: 6px;">⚠️ 逾期未完成 (${overdueTodos.length}件)：</div><ul style="padding-left: 20px; margin-bottom: 14px; color: #9f1239;">`;
       overdueTodos.forEach((t) => {
         const mems = t.members.join('、');
-        html += `<li><b>[${mems}]</b> ${t.title} (${t.date})</li>`;
+        const dStr = t.endDate && t.endDate > t.date ? `${t.date}~${t.endDate}` : t.date;
+        html += `<li><b>[${mems}]</b> ${t.title} (${dStr})</li>`;
       });
       html += `</ul>`;
     }
 
-    html += `<div style="color: #333; font-weight: bold; margin-bottom: 6px;">📌 今日待办 (${todayTodos.length}件)：</div>`;
+    html += `<div style="color: #333; font-weight: bold; margin-bottom: 6px;">📌 今日待办与进行中 (${todayTodos.length}件)：</div>`;
     if (todayTodos.length === 0) {
       html += `<p style="color: #888; font-size: 14px;">今天暂无待办，好好放松一下！</p>`;
     } else {
       html += `<ul style="padding-left: 20px; color: #222;">`;
       todayTodos.forEach((t) => {
         const mems = t.members.join('、');
-        html += `<li><b>[${mems}]</b> ${t.title}</li>`;
+        const rangeBadge = t.endDate && t.endDate > t.date ? ' ⏳[进行中]' : '';
+        html += `<li><b>[${mems}]</b> ${t.title}${rangeBadge}</li>`;
       });
       html += `</ul>`;
     }
+
 
     html += `</div>`;
 
