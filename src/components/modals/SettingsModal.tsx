@@ -18,6 +18,9 @@ import {
   Plus,
   Check,
   Send,
+  Eye,
+  Clock,
+  Sparkles,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -137,14 +140,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   // 1. 微信早报
+  const [showPreview, setShowPreview] = useState(false);
+
   const handleSendTodayDigest = async () => {
     setSendingDigest(true);
-    const res = await PushPlusService.sendTodayDigest(todos);
+    const res = await PushPlusService.sendTodayDigest(todos, members);
     setSendingDigest(false);
 
     if (res.ok) {
       confetti({ particleCount: 30, spread: 50 });
-      showToast('今日早报已推送到微信！');
+      showToast('未来两周家庭早报已推送到微信！');
     } else {
       showToast(res.msg, true);
     }
@@ -470,47 +475,75 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {/* TAB 2: 微信早报与提醒 */}
           {activeTab === 'wechat' && (
-            <div className="space-y-4 animate-in fade-in duration-150">
-              {/* 今日早报卡片 */}
-              <div className="bg-gradient-to-br from-amber-50/70 to-orange-50/50 border border-amber-200/60 rounded-xl p-4 space-y-3">
+            <div className="space-y-3.5 animate-in fade-in duration-150">
+              {/* 今日/两周家庭早报卡片 */}
+              <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl p-4 text-white shadow-xs space-y-3">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-2">
-                    <Sun className="w-5 h-5 text-amber-600" />
+                    <Sun className="w-5 h-5 text-amber-100" />
                     <div>
-                      <h4 className="text-xs font-bold text-zinc-900">今日家庭早报</h4>
-                      <p className="text-[11px] text-amber-800/80">汇总今日待办与逾期提醒，直接推送到微信</p>
+                      <h4 className="text-xs font-bold text-white">家庭事务晨报（未来两周日程）</h4>
+                      <p className="text-[11px] text-orange-100/90">汇总逾期未办、今日需办与接下来两周日程，手帐精美排版</p>
                     </div>
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handleSendTodayDigest}
-                  disabled={sendingDigest}
-                  className="w-full py-2.5 px-4 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-medium text-xs shadow-xs transition flex items-center justify-center gap-1.5 active:scale-98 disabled:opacity-50"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>{sendingDigest ? '正在推送到微信...' : '立即发送今日微信早报'}</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSendTodayDigest}
+                    disabled={sendingDigest}
+                    className="flex-1 py-2 px-3 rounded-xl bg-white hover:bg-orange-50 text-orange-900 font-bold text-xs shadow-xs transition flex items-center justify-center gap-1.5 active:scale-98 disabled:opacity-50"
+                  >
+                    <Send className="w-3.5 h-3.5 text-orange-600" />
+                    <span>{sendingDigest ? '正在推送到微信...' : '🚀 立即发送两周早报'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowPreview(true)}
+                    className="py-2 px-3 rounded-xl bg-black/20 hover:bg-black/30 text-white font-medium text-xs transition flex items-center justify-center gap-1 active:scale-98"
+                    title="在网页中预览微信推送排版"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>预览排版</span>
+                  </button>
+                </div>
               </div>
 
-              {/* 微信通道状态 */}
-              <div className="p-3.5 bg-zinc-50 rounded-xl border border-zinc-100 space-y-2.5">
+              {/* 每日 08:00 定时任务自动化托管 */}
+              <div className="p-3.5 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5 font-bold text-emerald-900">
+                    <Clock className="w-4 h-4 text-emerald-600" />
+                    <span>每日 08:00 定时自动推送 (云端托管)</span>
+                  </div>
+                  <span className="text-[10px] bg-emerald-200/60 text-emerald-800 font-semibold px-2 py-0.5 rounded-full">
+                    已生效
+                  </span>
+                </div>
+                <p className="text-[11px] text-emerald-800/80 leading-relaxed">
+                  已配置 Vercel Cron 与 GitHub Actions 双通道定时引擎。无需保持网页开启，每天北京时间早晨 8:00 自动读取云端最新日程，将整理好的两周手帐早报准时送达您的微信！
+                </p>
+              </div>
+
+              {/* 微信推送通道 */}
+              <div className="p-3.5 bg-zinc-50 rounded-2xl border border-zinc-200/80 space-y-2">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-medium text-zinc-700">PushPlus 微信推送通道</span>
-                  <span className="text-[10px] bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded-full">
-                    已内置启用
+                  <span className="text-[10px] bg-zinc-200 text-zinc-700 font-semibold px-2 py-0.5 rounded-full">
+                    内置托管
                   </span>
                 </div>
                 <p className="text-[11px] text-zinc-400 leading-relaxed">
-                  你的专属 PushPlus Token 已内置托管，全端免密。事项单发与早报推送均直接到达微信。
+                  已内置托管你的专属 Token，所有事项单发与两周早报均直通微信公众号与模板卡片。
                 </p>
 
                 <button
                   type="button"
                   onClick={handleTestWechat}
                   disabled={testingWechat}
-                  className="w-full py-2 px-3 text-xs font-medium text-zinc-700 bg-white hover:bg-zinc-100 border border-zinc-200 rounded-lg transition"
+                  className="w-full py-2 px-3 text-xs font-medium text-zinc-700 bg-white hover:bg-zinc-100 border border-zinc-200 rounded-xl transition"
                 >
                   {testingWechat ? '测试发送中...' : '🔔 发送一条测试微信消息'}
                 </button>
@@ -617,9 +650,47 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         {/* 底部版权/提示 */}
         <div className="px-5 py-3 bg-zinc-50 border-t border-zinc-100 text-[11px] text-zinc-400 text-center flex items-center justify-between">
           <span>亲邻记事 · 家庭事务中心</span>
-          <span className="text-[10px] text-zinc-400">v1.3 动态成员版</span>
+          <span className="text-[10px] text-zinc-400">v1.4 两周定时早报版</span>
         </div>
       </div>
+
+      {/* 微信排版效果真机预览浮层 */}
+      {showPreview && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-3 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden border border-zinc-300 flex flex-col h-[85vh] animate-in zoom-in-95 duration-150">
+            {/* 模拟微信导航栏 */}
+            <div className="bg-[#ededed] px-4 py-3 flex items-center justify-between border-b border-zinc-200">
+              <span className="text-xs font-semibold text-zinc-800">微信推送效果预览 (PushPlus)</span>
+              <button
+                type="button"
+                onClick={() => setShowPreview(false)}
+                className="text-zinc-500 hover:text-zinc-800 p-1 rounded-full hover:bg-zinc-200 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* 真实 HTML 预览 iframe */}
+            <iframe
+              title="Digest Preview"
+              srcDoc={PushPlusService.getDigestPreviewHtml(todos, members)}
+              className="flex-1 w-full border-none bg-[#f7f6f2]"
+            />
+
+            {/* 底部操作 */}
+            <div className="p-3 bg-white border-t border-zinc-100 flex items-center justify-between">
+              <span className="text-[11px] text-zinc-400">这就是在微信中打开阅读的效果</span>
+              <button
+                type="button"
+                onClick={() => setShowPreview(false)}
+                className="px-4 py-1.5 bg-zinc-900 text-white text-xs font-medium rounded-xl hover:bg-zinc-800 transition"
+              >
+                关闭预览
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

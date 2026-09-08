@@ -1,5 +1,6 @@
-import { TodoItem, getMemberLabel, getMemberBadge } from '../types';
+import { TodoItem, MemberItem, getMemberLabel, getMemberBadge } from '../types';
 import { formatTodoDateRange } from '../utils/dateUtils';
+import { renderTwoWeeksDigestHtml } from '../utils/digestRenderer';
 import { APP_CONFIG } from '../config';
 
 export class PushPlusService {
@@ -92,49 +93,12 @@ export class PushPlusService {
     return this.send(`【家庭提醒】${shortMembers}：${item.title}`, html);
   }
 
-  static async sendTodayDigest(todos: TodoItem[]) {
-    const today = new Date().toISOString().slice(0, 10);
-    const todayTodos = todos.filter((t) => {
-      if (t.done) return false;
-      if (t.endDate && t.endDate > t.date) {
-        return t.date <= today && today <= t.endDate;
-      }
-      return t.date === today;
-    });
-    const overdueTodos = todos.filter((t) => !t.done && (t.endDate || t.date) < today);
+  static async sendTodayDigest(todos: TodoItem[], members?: MemberItem[]) {
+    const { title, html } = renderTwoWeeksDigestHtml(todos, members);
+    return this.send(title, html);
+  }
 
-    let html = `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 20px; border: 1px solid #eaeaea; border-radius: 12px; background: #fff;">
-        <h3 style="margin-top: 0; color: #111; font-size: 18px;">☀️ 今日家庭事务清单</h3>
-    `;
-
-    if (overdueTodos.length > 0) {
-      html += `<div style="color: #e11d48; font-weight: bold; margin-bottom: 6px;">⚠️ 逾期未完成 (${overdueTodos.length}件)：</div><ul style="padding-left: 20px; margin-bottom: 14px; color: #9f1239;">`;
-      overdueTodos.forEach((t) => {
-        const mems = t.members.map((m) => getMemberBadge(m)).join('、');
-        const dStr = t.endDate && t.endDate > t.date ? `${t.date}~${t.endDate}` : t.date;
-        html += `<li><b>[${mems}]</b> ${t.title} (${dStr})</li>`;
-      });
-      html += `</ul>`;
-    }
-
-    html += `<div style="color: #333; font-weight: bold; margin-bottom: 6px;">📌 今日待办与进行中 (${todayTodos.length}件)：</div>`;
-    if (todayTodos.length === 0) {
-      html += `<p style="color: #888; font-size: 14px;">今天暂无待办，好好放松一下！</p>`;
-    } else {
-      html += `<ul style="padding-left: 20px; color: #222;">`;
-      todayTodos.forEach((t) => {
-        const mems = t.members.map((m) => getMemberBadge(m)).join('、');
-        const rangeBadge = t.endDate && t.endDate > t.date ? ' ⏳[进行中]' : '';
-        html += `<li><b>[${mems}]</b> ${t.title}${rangeBadge}</li>`;
-      });
-      html += `</ul>`;
-    }
-
-
-
-    html += `</div>`;
-
-    return this.send(`【家庭清单】今日需办 ${todayTodos.length} 件`, html);
+  static getDigestPreviewHtml(todos: TodoItem[], members?: MemberItem[]): string {
+    return renderTwoWeeksDigestHtml(todos, members).html;
   }
 }
