@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { TodoItem, FamilyMember, MEMBERS } from '../../types';
+import { TodoItem, FamilyMember, MEMBERS, MEMBER_CONFIG, getMemberBadge } from '../../types';
 import { getTodayStr } from '../../utils/dateUtils';
 import { X, Trash2, Calendar, Bell, Check } from 'lucide-react';
 import { addDays, format, parseISO, differenceInCalendarDays } from 'date-fns';
@@ -28,7 +28,7 @@ export const AffairModal: React.FC<AffairModalProps> = ({
   const afterTomorrowStr = format(addDays(new Date(), 2), 'yyyy-MM-dd');
 
   const [title, setTitle] = useState('');
-  const [selectedMembers, setSelectedMembers] = useState<FamilyMember[]>(['我']);
+  const [selectedMembers, setSelectedMembers] = useState<FamilyMember[]>(['佳']);
   const [isRangeMode, setIsRangeMode] = useState(false);
   const [startDate, setStartDate] = useState(initialDate || todayStr);
   const [endDate, setEndDate] = useState(initialDate || todayStr);
@@ -37,7 +37,8 @@ export const AffairModal: React.FC<AffairModalProps> = ({
   useEffect(() => {
     if (editingItem) {
       setTitle(editingItem.title);
-      setSelectedMembers(editingItem.members || ['我']);
+      const normalized = (editingItem.members || ['佳']).map((m) => getMemberBadge(m));
+      setSelectedMembers(normalized as FamilyMember[]);
       setStartDate(editingItem.date);
       const hasRange = Boolean(editingItem.endDate && editingItem.endDate > editingItem.date);
       setIsRangeMode(hasRange);
@@ -45,7 +46,7 @@ export const AffairModal: React.FC<AffairModalProps> = ({
       setRemindWechat(editingItem.remindWechat || false);
     } else {
       setTitle('');
-      setSelectedMembers(['我']);
+      setSelectedMembers(['佳']);
       const initD = initialDate || todayStr;
       setStartDate(initD);
       setEndDate(initD);
@@ -148,19 +149,23 @@ export const AffairModal: React.FC<AffairModalProps> = ({
             <div className="flex flex-wrap gap-1.5">
               {MEMBERS.map((m) => {
                 const selected = selectedMembers.includes(m);
+                const roleDesc = MEMBER_CONFIG[m]?.desc || m;
                 return (
                   <button
                     key={m}
                     type="button"
                     onClick={() => handleToggleMember(m)}
-                    className={`px-3 py-1 rounded-full text-xs font-medium border transition flex items-center gap-1 ${
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition flex items-center gap-1.5 ${
                       selected
                         ? 'bg-zinc-900 text-white border-zinc-900 shadow-2xs'
-                        : 'bg-zinc-50 text-zinc-600 border-zinc-200 hover:bg-zinc-100'
+                        : 'bg-zinc-50 text-zinc-700 border-zinc-200 hover:bg-zinc-100'
                     }`}
                   >
                     {selected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                    <span>{m}</span>
+                    <span className="font-bold text-xs">{m}</span>
+                    <span className={`text-[10px] ${selected ? 'text-zinc-300' : 'text-zinc-400'}`}>
+                      {roleDesc}
+                    </span>
                   </button>
                 );
               })}

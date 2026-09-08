@@ -1,4 +1,4 @@
-import { TodoItem } from '../types';
+import { TodoItem, getMemberLabel, getMemberBadge } from '../types';
 import { formatTodoDateRange } from '../utils/dateUtils';
 import { APP_CONFIG } from '../config';
 
@@ -70,7 +70,9 @@ export class PushPlusService {
     const dateDesc = item.endDate && item.endDate > item.date 
       ? `${item.date} ~ ${item.endDate} (${dateRangeInfo.label})`
       : `${item.date} (${dateRangeInfo.label})`;
-    const membersText = item.members && item.members.length > 0 ? item.members.join('、') : '全家';
+    const membersText = item.members && item.members.length > 0 
+      ? item.members.map((m) => getMemberLabel(m)).join('、') 
+      : '全家';
 
     const html = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 20px; border: 1px solid #eaeaea; border-radius: 12px; background: #fff;">
@@ -83,7 +85,11 @@ export class PushPlusService {
       </div>
     `;
 
-    return this.send(`【家庭提醒】${membersText}：${item.title}`, html);
+    const shortMembers = item.members && item.members.length > 0
+      ? item.members.map((m) => getMemberBadge(m)).join('、')
+      : '全家';
+
+    return this.send(`【家庭提醒】${shortMembers}：${item.title}`, html);
   }
 
   static async sendTodayDigest(todos: TodoItem[]) {
@@ -105,7 +111,7 @@ export class PushPlusService {
     if (overdueTodos.length > 0) {
       html += `<div style="color: #e11d48; font-weight: bold; margin-bottom: 6px;">⚠️ 逾期未完成 (${overdueTodos.length}件)：</div><ul style="padding-left: 20px; margin-bottom: 14px; color: #9f1239;">`;
       overdueTodos.forEach((t) => {
-        const mems = t.members.join('、');
+        const mems = t.members.map((m) => getMemberBadge(m)).join('、');
         const dStr = t.endDate && t.endDate > t.date ? `${t.date}~${t.endDate}` : t.date;
         html += `<li><b>[${mems}]</b> ${t.title} (${dStr})</li>`;
       });
@@ -118,12 +124,13 @@ export class PushPlusService {
     } else {
       html += `<ul style="padding-left: 20px; color: #222;">`;
       todayTodos.forEach((t) => {
-        const mems = t.members.join('、');
+        const mems = t.members.map((m) => getMemberBadge(m)).join('、');
         const rangeBadge = t.endDate && t.endDate > t.date ? ' ⏳[进行中]' : '';
         html += `<li><b>[${mems}]</b> ${t.title}${rangeBadge}</li>`;
       });
       html += `</ul>`;
     }
+
 
 
     html += `</div>`;

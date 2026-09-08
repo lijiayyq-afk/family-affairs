@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TodoItem } from '../../types';
+import { TodoItem, getMemberBadge } from '../../types';
 import { MEMBER_COLORS } from '../../constants/initialData';
 import { formatTodoDateRange } from '../../utils/dateUtils';
 import { Check, Circle, Trash2, Bell, Plus } from 'lucide-react';
@@ -99,17 +99,18 @@ export const TodoView: React.FC<TodoViewProps> = ({
 
         {/* 右侧：多位家人标签、日期、操作 */}
         <div className="flex items-center gap-2 shrink-0">
-          {/* 支持展示多个关联家人 */}
+          {/* 支持展示多个关联家人的单字标志 */}
           <div className="flex items-center gap-1">
-            {(item.members || ['我']).map((mem) => {
-              const color = MEMBER_COLORS[mem] || { bg: '#f4f4f5', text: '#52525b', dot: '#71717a' };
+            {(item.members || ['佳']).map((rawMem) => {
+              const badge = getMemberBadge(rawMem);
+              const color = MEMBER_COLORS[badge] || MEMBER_COLORS[rawMem] || { bg: '#f4f4f5', text: '#52525b', dot: '#71717a' };
               return (
                 <span
-                  key={mem}
+                  key={rawMem}
                   style={{ backgroundColor: color.bg, color: color.text }}
-                  className="text-[11px] font-medium px-1.5 py-0.5 rounded-md"
+                  className="text-[11px] font-bold px-1.5 py-0.5 rounded-md shadow-2xs"
                 >
-                  {mem}
+                  {badge}
                 </span>
               );
             })}

@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { TodoItem, FamilyMember, MEMBERS } from '../../types';
+import { TodoItem, FamilyMember, MEMBERS, MEMBER_CONFIG, getMemberBadge } from '../../types';
 import { MEMBER_COLORS } from '../../constants/initialData';
 import { StorageService } from '../../services/storageService';
 import { SyncService } from '../../services/syncService';
@@ -120,8 +120,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   // 统计每位成员的事项数
   const getMemberStats = (member: FamilyMember) => {
-    const active = todos.filter((t) => !t.done && (t.members || ['我']).includes(member)).length;
-    const done = todos.filter((t) => t.done && (t.members || ['我']).includes(member)).length;
+    const badge = getMemberBadge(member);
+    const active = todos.filter((t) => !t.done && (t.members || ['佳']).map((m) => getMemberBadge(m)).includes(badge)).length;
+    const done = todos.filter((t) => t.done && (t.members || ['佳']).map((m) => getMemberBadge(m)).includes(badge)).length;
     return { active, done, total: active + done };
   };
 
@@ -199,6 +200,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 {MEMBERS.map((m) => {
                   const color = MEMBER_COLORS[m];
                   const stats = getMemberStats(m);
+                  const roleDesc = MEMBER_CONFIG[m]?.desc || m;
                   return (
                     <div
                       key={m}
@@ -207,13 +209,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <div className="flex items-center gap-2.5">
                         <span
                           style={{ backgroundColor: color.bg, color: color.text }}
-                          className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shadow-2xs"
+                          className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shadow-2xs"
                         >
                           {m}
                         </span>
                         <div>
-                          <div className="text-xs font-semibold text-zinc-800">{m}</div>
-                          <div className="text-[10px] text-zinc-400">家庭核心成员</div>
+                          <div className="text-xs font-bold text-zinc-900 flex items-center gap-1">
+                            <span>{m}</span>
+                            <span className="text-[11px] text-zinc-400 font-normal">({roleDesc})</span>
+                          </div>
+                          <div className="text-[10px] text-zinc-400">家庭成员标志</div>
                         </div>
                       </div>
 

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { TodoItem } from '../../types';
+import { TodoItem, getMemberBadge } from '../../types';
 import { MEMBER_COLORS } from '../../constants/initialData';
 import { formatHumanDate, getDateRangeDays, formatTodoDateRange } from '../../utils/dateUtils';
 import {
@@ -179,7 +179,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 {/* 事项小圆点（彻底解决文字拥挤问题） */}
                 <div className="h-1.5 flex items-center justify-center gap-0.5 mt-0.5">
                   {dayTodos.slice(0, 3).map((t, idx) => {
-                    const firstMember = t.members?.[0] || '我';
+                    const firstMember = getMemberBadge(t.members?.[0] || '佳');
                     const color = MEMBER_COLORS[firstMember]?.dot || '#71717a';
                     return (
                       <span
@@ -277,15 +277,16 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
                   <div className="flex items-center gap-1.5 shrink-0">
                     <div className="flex items-center gap-1">
-                      {(item.members || ['我']).map((mem) => {
-                        const color = MEMBER_COLORS[mem] || { bg: '#f4f4f5', text: '#52525b' };
+                      {(item.members || ['佳']).map((rawMem) => {
+                        const badge = getMemberBadge(rawMem);
+                        const color = MEMBER_COLORS[badge] || MEMBER_COLORS[rawMem] || { bg: '#f4f4f5', text: '#52525b' };
                         return (
                           <span
-                            key={mem}
+                            key={rawMem}
                             style={{ backgroundColor: color.bg, color: color.text }}
-                            className="text-[11px] font-medium px-1.5 py-0.5 rounded-md"
+                            className="text-[11px] font-bold px-1.5 py-0.5 rounded-md shadow-2xs"
                           >
-                            {mem}
+                            {badge}
                           </span>
                         );
                       })}
