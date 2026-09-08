@@ -1,4 +1,4 @@
-import { TodoItem, PushPlusConfig, FamilyMember } from '../types';
+import { TodoItem, FamilyMember } from '../types';
 import { format, addDays } from 'date-fns';
 
 export const MEMBER_COLORS: Record<FamilyMember, { bg: string; text: string; dot: string }> = {
@@ -17,8 +17,8 @@ export const getInitialTodos = (): TodoItem[] => {
   return [
     {
       id: '1',
-      title: '去医院给爷爷配慢病药',
-      member: '爷爷',
+      title: '陪爷爷去医院配慢病药',
+      members: ['我', '爷爷'], // 支持多成员
       date: today,
       done: false,
       remindWechat: true,
@@ -27,7 +27,7 @@ export const getInitialTodos = (): TodoItem[] => {
     {
       id: '2',
       title: '交家里水电气费',
-      member: '我',
+      members: ['我'],
       date: tomorrow,
       done: false,
       remindWechat: false,
@@ -36,15 +36,11 @@ export const getInitialTodos = (): TodoItem[] => {
     {
       id: '3',
       title: '买家里的米面油和抽纸',
-      member: '配偶',
+      members: ['我', '配偶'], // 支持多成员
       date: today,
       done: false,
       remindWechat: false,
       createdAt: new Date().toISOString(),
     },
   ];
-};
-
-export const INITIAL_PUSHPLUS: PushPlusConfig = {
-  token: '',
 };

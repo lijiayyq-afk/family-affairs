@@ -1,28 +1,21 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { TodoItem, PushPlusConfig, ActiveTab } from './types';
+import { TodoItem, ActiveTab } from './types';
 import { StorageService } from './services/storageService';
 import { PushPlusService } from './services/pushPlusService';
 import { TodoView } from './components/views/TodoView';
 import { CalendarView } from './components/views/CalendarView';
 import { AffairModal } from './components/modals/AffairModal';
-import { SettingsModal } from './components/modals/SettingsModal';
-import { Plus, Settings, Sun, Check, AlertCircle } from 'lucide-react';
+import { Plus, Sun, Check, AlertCircle } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 export function App() {
   const [todos, setTodos] = useState<TodoItem[]>(() => StorageService.getTodos());
-  const [pushPlusConfig, setPushPlusConfig] = useState<PushPlusConfig>(() =>
-    StorageService.getPushPlusConfig()
-  );
-
   const [activeTab, setActiveTab] = useState<ActiveTab>('todos');
 
   // 弹窗状态
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<TodoItem | null>(null);
   const [modalDate, setModalDate] = useState<string | undefined>();
-
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // 轻量 Toast 提示
   const [toast, setToast] = useState<{ text: string; error?: boolean } | null>(null);
@@ -37,10 +30,6 @@ export function App() {
   useEffect(() => {
     StorageService.saveTodos(todos);
   }, [todos]);
-
-  useEffect(() => {
-    StorageService.savePushPlusConfig(pushPlusConfig);
-  }, [pushPlusConfig]);
 
   const activeCount = useMemo(() => todos.filter((t) => !t.done).length, [todos]);
 
@@ -59,7 +48,7 @@ export function App() {
     showToast(editingItem ? '已修改' : '已记下');
 
     if (sendWechatNow) {
-      const res = await PushPlusService.sendItem(item, pushPlusConfig.token);
+      const res = await PushPlusService.sendItem(item);
       if (res.ok) {
         showToast('已推送到微信');
       } else {
@@ -83,7 +72,7 @@ export function App() {
 
   // 发送单条微信
   const handleSendWechat = async (item: TodoItem) => {
-    const res = await PushPlusService.sendItem(item, pushPlusConfig.token);
+    const res = await PushPlusService.sendItem(item);
     if (res.ok) {
       showToast('已推送到微信');
     } else {
@@ -95,7 +84,7 @@ export function App() {
   const [sendingDigest, setSendingDigest] = useState(false);
   const handleSendTodayDigest = async () => {
     setSendingDigest(true);
-    const res = await PushPlusService.sendTodayDigest(todos, pushPlusConfig.token);
+    const res = await PushPlusService.sendTodayDigest(todos);
     setSendingDigest(false);
 
     if (res.ok) {
@@ -104,14 +93,6 @@ export function App() {
     } else {
       showToast(res.msg, true);
     }
-  };
-
-  // 重置数据
-  const handleResetData = () => {
-    StorageService.clearAll();
-    setTodos(StorageService.getTodos());
-    setPushPlusConfig(StorageService.getPushPlusConfig());
-    showToast('已重置数据');
   };
 
   return (
@@ -152,30 +133,19 @@ export function App() {
             </button>
           </div>
 
-          {/* 右侧操作 */}
-          <div className="flex items-center gap-1.5">
-            {/* 早报 */}
+          {/* 右侧操作：发微信早报 + 记一笔 */}
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleSendTodayDigest}
               disabled={sendingDigest}
-              className="p-2 text-zinc-500 hover:text-amber-700 hover:bg-zinc-200/60 rounded-xl transition"
+              className="flex items-center gap-1 text-xs text-zinc-600 hover:text-amber-800 bg-zinc-100 hover:bg-zinc-200/80 px-2.5 py-1.5 rounded-xl transition"
               title="发送今日早报至微信"
             >
-              <Sun className="w-4 h-4" />
+              <Sun className="w-3.5 h-3.5 text-amber-600" />
+              <span className="hidden sm:inline">微信早报</span>
             </button>
 
-            {/* 设置 */}
-            <button
-              type="button"
-              onClick={() => setIsSettingsOpen(true)}
-              className="p-2 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-200/60 rounded-xl transition"
-              title="微信推送设置"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
-
-            {/* 记一笔 */}
             <button
               type="button"
               onClick={() => {
@@ -226,6 +196,9 @@ export function App() {
               setModalDate(undefined);
               setIsModalOpen(true);
             }}
+            onToggleStatus={handleToggle}
+            onDelete={handleDelete}
+            onSendWechat={handleSendWechat}
           />
         )}
       </main>
@@ -240,16 +213,7 @@ export function App() {
         initialDate={modalDate}
       />
 
-      {/* 设置弹窗 */}
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        config={pushPlusConfig}
-        onSaveConfig={setPushPlusConfig}
-        onResetData={handleResetData}
-      />
-
-      {/* Toast 提示 */}
+      {/* 底部轻量 Toast 提示 */}
       {toast && (
         <div
           className={`fixed bottom-5 right-5 z-50 px-3.5 py-2 rounded-xl text-xs font-medium shadow-md flex items-center gap-1.5 animate-in slide-in-from-bottom duration-150 ${

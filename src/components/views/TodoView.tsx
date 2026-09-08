@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { TodoItem } from '../../types';
 import { MEMBER_COLORS } from '../../constants/initialData';
 import { formatHumanDate } from '../../utils/dateUtils';
-import { Check, Circle, Trash2, Bell, Plus, Sparkles } from 'lucide-react';
+import { Check, Circle, Trash2, Bell, Plus } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 interface TodoViewProps {
@@ -47,7 +47,6 @@ export const TodoView: React.FC<TodoViewProps> = ({
   };
 
   const renderTodoRow = (item: TodoItem) => {
-    const color = MEMBER_COLORS[item.member] || { bg: '#f4f4f5', text: '#52525b', dot: '#71717a' };
     const dateInfo = formatHumanDate(item.date);
 
     return (
@@ -85,15 +84,23 @@ export const TodoView: React.FC<TodoViewProps> = ({
           </span>
         </div>
 
-        {/* 右侧：标签、日期、操作 */}
+        {/* 右侧：多位家人标签、日期、操作 */}
         <div className="flex items-center gap-2 shrink-0">
-          {/* 家人标签 */}
-          <span
-            style={{ backgroundColor: color.bg, color: color.text }}
-            className="text-[11px] font-medium px-2 py-0.5 rounded-md"
-          >
-            {item.member}
-          </span>
+          {/* 支持展示多个关联家人 */}
+          <div className="flex items-center gap-1">
+            {(item.members || ['我']).map((mem) => {
+              const color = MEMBER_COLORS[mem] || { bg: '#f4f4f5', text: '#52525b', dot: '#71717a' };
+              return (
+                <span
+                  key={mem}
+                  style={{ backgroundColor: color.bg, color: color.text }}
+                  className="text-[11px] font-medium px-1.5 py-0.5 rounded-md"
+                >
+                  {mem}
+                </span>
+              );
+            })}
+          </div>
 
           {/* 自然日期 */}
           <span
@@ -123,7 +130,7 @@ export const TodoView: React.FC<TodoViewProps> = ({
             </button>
           )}
 
-          {/* 醒目的删除按钮，直接管理 */}
+          {/* 醒目的删除按钮 */}
           <button
             type="button"
             onClick={(e) => {

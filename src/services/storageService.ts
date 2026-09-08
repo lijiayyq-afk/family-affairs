@@ -1,16 +1,27 @@
-import { TodoItem, PushPlusConfig } from '../types';
-import { getInitialTodos, INITIAL_PUSHPLUS } from '../constants/initialData';
+import { TodoItem } from '../types';
+import { getInitialTodos } from '../constants/initialData';
 
-const KEYS = {
-  TODOS: 'family_todos_v3',
-  PUSHPLUS: 'family_pushplus_v3',
-};
+const STORAGE_KEY = 'family_todos_v4';
 
 export class StorageService {
   static getTodos(): TodoItem[] {
     try {
-      const raw = localStorage.getItem(KEYS.TODOS);
-      return raw ? JSON.parse(raw) : getInitialTodos();
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return getInitialTodos();
+
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return getInitialTodos();
+
+      // 兼容旧数据中单成员 member 字段转为 members 数组
+      return parsed.map((item: any) => {
+        if (!item.members) {
+          return {
+            ...item,
+            members: item.member ? [item.member] : ['我'],
+          };
+        }
+        return item;
+      });
     } catch {
       return getInitialTodos();
     }
@@ -18,31 +29,13 @@ export class StorageService {
 
   static saveTodos(todos: TodoItem[]): void {
     try {
-      localStorage.setItem(KEYS.TODOS, JSON.stringify(todos));
-    } catch (e) {
-      console.error(e);
-    }
-  }
-
-  static getPushPlusConfig(): PushPlusConfig {
-    try {
-      const raw = localStorage.getItem(KEYS.PUSHPLUS);
-      return raw ? JSON.parse(raw) : INITIAL_PUSHPLUS;
-    } catch {
-      return INITIAL_PUSHPLUS;
-    }
-  }
-
-  static savePushPlusConfig(config: PushPlusConfig): void {
-    try {
-      localStorage.setItem(KEYS.PUSHPLUS, JSON.stringify(config));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
     } catch (e) {
       console.error(e);
     }
   }
 
   static clearAll(): void {
-    localStorage.removeItem(KEYS.TODOS);
-    localStorage.removeItem(KEYS.PUSHPLUS);
+    localStorage.removeItem(STORAGE_KEY);
   }
 }

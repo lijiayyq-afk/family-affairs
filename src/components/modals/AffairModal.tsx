@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { TodoItem, FamilyMember, MEMBERS } from '../../types';
 import { getTodayStr } from '../../utils/dateUtils';
-import { X, Trash2, Calendar, Bell } from 'lucide-react';
+import { X, Trash2, Calendar, Bell, Check } from 'lucide-react';
 import { addDays, format } from 'date-fns';
 
 interface AffairModalProps {
@@ -28,23 +28,38 @@ export const AffairModal: React.FC<AffairModalProps> = ({
   const afterTomorrowStr = format(addDays(new Date(), 2), 'yyyy-MM-dd');
 
   const [title, setTitle] = useState('');
-  const [member, setMember] = useState<FamilyMember>('我');
+  const [selectedMembers, setSelectedMembers] = useState<FamilyMember[]>(['我']);
   const [date, setDate] = useState(initialDate || todayStr);
   const [remindWechat, setRemindWechat] = useState(false);
 
   useEffect(() => {
     if (editingItem) {
       setTitle(editingItem.title);
-      setMember(editingItem.member);
+      setSelectedMembers(editingItem.members || ['我']);
       setDate(editingItem.date);
       setRemindWechat(editingItem.remindWechat || false);
     } else {
       setTitle('');
-      setMember('我');
+      setSelectedMembers(['我']);
       setDate(initialDate || todayStr);
       setRemindWechat(false);
     }
   }, [editingItem, initialDate, isOpen, todayStr]);
+
+  // 切换成员多选
+  const handleToggleMember = (m: FamilyMember) => {
+    setSelectedMembers((prev) => {
+      if (prev.includes(m)) {
+        // 如果已经包含了，且多于1个人，则取消
+        if (prev.length > 1) {
+          return prev.filter((item) => item !== m);
+        }
+        return prev; // 至少保留 1 人
+      } else {
+        return [...prev, m];
+      }
+    });
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,7 +68,7 @@ export const AffairModal: React.FC<AffairModalProps> = ({
     const item: TodoItem = {
       id: editingItem ? editingItem.id : `todo-${Date.now()}`,
       title: title.trim(),
-      member,
+      members: selectedMembers,
       date,
       done: editingItem ? editingItem.done : false,
       remindWechat,
@@ -65,7 +80,7 @@ export const AffairModal: React.FC<AffairModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-xs animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/35 backdrop-blur-xs animate-in fade-in duration-150">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden border border-zinc-200">
         {/* 头部 */}
         <div className="px-5 py-4 flex items-center justify-between border-b border-zinc-100">
@@ -99,37 +114,45 @@ export const AffairModal: React.FC<AffairModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          {/* 输入标题 */}
+          {/* 事项标题 */}
           <div>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="需要办什么事？(如: 去医院配药、交水费)"
+              placeholder="需要办什么事？(如: 陪爷爷去医院、交水费)"
               autoFocus
               required
               className="w-full text-base font-medium px-0 py-2 border-b border-zinc-200 focus:border-zinc-900 focus:outline-hidden transition placeholder:text-zinc-300 text-zinc-900"
             />
           </div>
 
-          {/* 关联家人 */}
+          {/* 关联家人（多选） */}
           <div>
-            <label className="block text-[11px] font-medium text-zinc-400 mb-2">谁的事情</label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-[11px] font-medium text-zinc-400">
+                谁的事情 (支持多选)
+              </label>
+              <span className="text-[10px] text-zinc-400">
+                已选: {selectedMembers.join('、')}
+              </span>
+            </div>
             <div className="flex flex-wrap gap-1.5">
               {MEMBERS.map((m) => {
-                const selected = member === m;
+                const selected = selectedMembers.includes(m);
                 return (
                   <button
                     key={m}
                     type="button"
-                    onClick={() => setMember(m)}
-                    className={`px-3 py-1 rounded-full text-xs font-medium border transition ${
+                    onClick={() => handleToggleMember(m)}
+                    className={`px-3 py-1 rounded-full text-xs font-medium border transition flex items-center gap-1 ${
                       selected
-                        ? 'bg-zinc-900 text-white border-zinc-900'
+                        ? 'bg-zinc-900 text-white border-zinc-900 shadow-2xs'
                         : 'bg-zinc-50 text-zinc-600 border-zinc-200 hover:bg-zinc-100'
                     }`}
                   >
-                    {m}
+                    {selected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                    <span>{m}</span>
                   </button>
                 );
               })}
@@ -200,7 +223,7 @@ export const AffairModal: React.FC<AffairModalProps> = ({
             />
           </div>
 
-          {/* 提交按钮 */}
+          {/* 底部按钮 */}
           <div className="pt-2 flex justify-end gap-2">
             <button
               type="button"
