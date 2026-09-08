@@ -6,9 +6,8 @@ import { PushPlusService } from './services/pushPlusService';
 import { TodoView } from './components/views/TodoView';
 import { CalendarView } from './components/views/CalendarView';
 import { AffairModal } from './components/modals/AffairModal';
-import { BackupModal } from './components/modals/BackupModal';
-import { Plus, Sun, Check, AlertCircle, Database, Cloud, RefreshCw } from 'lucide-react';
-import confetti from 'canvas-confetti';
+import { SettingsModal } from './components/modals/SettingsModal';
+import { Plus, Check, AlertCircle, Cloud, RefreshCw, Settings } from 'lucide-react';
 
 export function App() {
   const [todos, setTodos] = useState<TodoItem[]>(() => StorageService.getTodos());
@@ -17,7 +16,7 @@ export function App() {
 
   // 弹窗状态
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isBackupOpen, setIsBackupOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<TodoItem | null>(null);
   const [modalDate, setModalDate] = useState<string | undefined>();
 
@@ -114,21 +113,6 @@ export function App() {
     }
   };
 
-  // 发送今日微信早报
-  const [sendingDigest, setSendingDigest] = useState(false);
-  const handleSendTodayDigest = async () => {
-    setSendingDigest(true);
-    const res = await PushPlusService.sendTodayDigest(todos);
-    setSendingDigest(false);
-
-    if (res.ok) {
-      confetti({ particleCount: 30, spread: 50 });
-      showToast('今日早报已推送到微信！');
-    } else {
-      showToast(res.msg, true);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-[#faf9f6] flex flex-col font-sans text-zinc-900 selection:bg-zinc-200">
       {/* 顶部固定导航栏 */}
@@ -179,27 +163,16 @@ export function App() {
             </button>
           </div>
 
-          {/* 右侧操作：数据备份 + 发微信早报 + 记一笔 */}
+          {/* 右侧操作：家庭设置与管理 + 记一笔 */}
           <div className="flex items-center gap-1.5 sm:gap-2">
             <button
               type="button"
-              onClick={() => setIsBackupOpen(true)}
-              className="flex items-center gap-1 text-xs text-zinc-600 hover:text-zinc-900 bg-zinc-100 hover:bg-zinc-200/80 px-2 py-1.5 sm:px-2.5 rounded-xl transition"
-              title="数据备份与恢复"
+              onClick={() => setIsSettingsOpen(true)}
+              className="flex items-center gap-1.5 text-xs text-zinc-600 hover:text-zinc-900 bg-zinc-100 hover:bg-zinc-200/80 px-2.5 py-1.5 rounded-xl transition"
+              title="家庭设置与管理（数据备份、微信早报、人员管理）"
             >
-              <Database className="w-3.5 h-3.5 text-zinc-600" />
-              <span className="hidden sm:inline">备份</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleSendTodayDigest}
-              disabled={sendingDigest}
-              className="flex items-center gap-1 text-xs text-zinc-600 hover:text-amber-800 bg-zinc-100 hover:bg-zinc-200/80 px-2 py-1.5 sm:px-2.5 rounded-xl transition"
-              title="发送今日早报至微信"
-            >
-              <Sun className="w-3.5 h-3.5 text-amber-600" />
-              <span className="hidden sm:inline">微信早报</span>
+              <Settings className="w-3.5 h-3.5 text-zinc-600" />
+              <span className="hidden sm:inline">设置</span>
             </button>
 
             <button
@@ -269,10 +242,10 @@ export function App() {
         initialDate={modalDate}
       />
 
-      {/* 数据与备份弹窗 */}
-      <BackupModal
-        isOpen={isBackupOpen}
-        onClose={() => setIsBackupOpen(false)}
+      {/* 家庭设置与管理弹窗 (数据备份、微信早报、人员管理) */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
         todos={todos}
         onImportSuccess={(newTodos) => setTodos(newTodos)}
         showToast={showToast}
