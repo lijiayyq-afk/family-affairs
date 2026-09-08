@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { TodoItem, getMemberBadge } from '../../types';
-import { MEMBER_COLORS } from '../../constants/initialData';
+import { TodoItem, MemberItem, getMemberBadge, getMemberColor } from '../../types';
 import { formatTodoDateRange } from '../../utils/dateUtils';
 import { Check, Circle, Trash2, Bell, Plus } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 interface TodoViewProps {
   todos: TodoItem[];
+  members: MemberItem[];
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
   onEdit: (item: TodoItem) => void;
@@ -16,6 +16,7 @@ interface TodoViewProps {
 
 export const TodoView: React.FC<TodoViewProps> = ({
   todos,
+  members,
   onToggle,
   onDelete,
   onEdit,
@@ -102,8 +103,8 @@ export const TodoView: React.FC<TodoViewProps> = ({
           {/* 支持展示多个关联家人的单字标志 */}
           <div className="flex items-center gap-1">
             {(item.members || ['佳']).map((rawMem) => {
-              const badge = getMemberBadge(rawMem);
-              const color = MEMBER_COLORS[badge] || MEMBER_COLORS[rawMem] || { bg: '#f4f4f5', text: '#52525b', dot: '#71717a' };
+              const badge = getMemberBadge(rawMem, members);
+              const color = getMemberColor(rawMem, members);
               return (
                 <span
                   key={rawMem}

@@ -1,6 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { TodoItem, FamilyMember, MEMBERS, MEMBER_CONFIG, getMemberBadge } from '../../types';
-import { MEMBER_COLORS } from '../../constants/initialData';
+import { TodoItem, MemberItem, MemberColor, PRESET_COLORS, getMemberBadge } from '../../types';
 import { StorageService } from '../../services/storageService';
 import { SyncService } from '../../services/syncService';
 import { PushPlusService } from '../../services/pushPlusService';
@@ -12,11 +11,11 @@ import {
   Database,
   Download,
   Upload,
-  ShieldCheck,
   Cloud,
   RefreshCw,
   Trash2,
-  Bell,
+  Edit2,
+  Plus,
   Check,
   Send,
 } from 'lucide-react';
@@ -26,7 +25,9 @@ interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   todos: TodoItem[];
-  onImportSuccess: (todos: TodoItem[]) => void;
+  members: MemberItem[];
+  onUpdateMembers: (members: MemberItem[]) => void;
+  onImportSuccess: (todos: TodoItem[], members?: MemberItem[]) => void;
   showToast: (text: string, error?: boolean) => void;
 }
 
@@ -36,6 +37,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
   onClose,
   todos,
+  members,
+  onUpdateMembers,
   onImportSuccess,
   showToast,
 }) => {
@@ -44,7 +47,94 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [testingWechat, setTestingWechat] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // 成员编辑/新增状态
+  const [isEditingMember, setIsEditingMember] = useState(false);
+  const [editingMemberId, setEditingMemberId] = useState<string | null>(null); // 'new' 或具体 id
+  const [formBadge, setFormBadge] = useState('');
+  const [formRole, setFormRole] = useState('');
+  const [formColor, setFormColor] = useState<MemberColor>(PRESET_COLORS[0].color);
+
   if (!isOpen) return null;
+
+  // 开启新增成员表单
+  const handleOpenAddMember = () => {
+    setEditingMemberId('new');
+    setFormBadge('');
+    setFormRole('');
+    // 自动轮换预设颜色，避免每个人都一个颜色
+    const nextColor = PRESET_COLORS[members.length % PRESET_COLORS.length].color;
+    setFormColor(nextColor);
+    setIsEditingMember(true);
+  };
+
+  // 开启修改成员表单
+  const handleOpenEditMember = (m: MemberItem) => {
+    setEditingMemberId(m.id);
+    setFormBadge(m.badge);
+    setFormRole(m.role);
+    setFormColor(m.color);
+    setIsEditingMember(true);
+  };
+
+  // 保存成员（新增或编辑）
+  const handleSaveMember = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanBadge = formBadge.trim();
+    const cleanRole = formRole.trim();
+
+    if (!cleanBadge) {
+      showToast('请输入1-2个字的标志', true);
+      return;
+    }
+    if (!cleanRole) {
+      showToast('请输入称谓关系（如：配偶、外公、阿姨等）', true);
+      return;
+    }
+
+    if (editingMemberId === 'new') {
+      // 检查标志是否已重复
+      const exist = members.find((m) => m.badge === cleanBadge);
+      if (exist) {
+        showToast(`标志“${cleanBadge}”已存在，请换一个单字`, true);
+        return;
+      }
+      const newMember: MemberItem = {
+        id: `m_${Date.now()}`,
+        badge: cleanBadge.slice(0, 2),
+        role: cleanRole,
+        color: formColor,
+      };
+      const updated = [...members, newMember];
+      onUpdateMembers(updated);
+      showToast(`已成功添加成员 ${cleanRole} (${cleanBadge})`);
+    } else {
+      // 编辑已有成员
+      const updated = members.map((m) =>
+        m.id === editingMemberId
+          ? { ...m, badge: cleanBadge.slice(0, 2), role: cleanRole, color: formColor }
+          : m
+      );
+      onUpdateMembers(updated);
+      showToast(`已更新成员 ${cleanRole} 信息`);
+    }
+
+    setIsEditingMember(false);
+    setEditingMemberId(null);
+  };
+
+  // 删除成员
+  const handleDeleteMember = (m: MemberItem) => {
+    if (members.length <= 1) {
+      showToast('家庭中至少需要保留 1 位成员', true);
+      return;
+    }
+
+    if (confirm(`确定要删除家庭成员“${m.role} (${m.badge})”吗？\n（历史事项仍会保留其文字标记）`)) {
+      const updated = members.filter((item) => item.id !== m.id);
+      onUpdateMembers(updated);
+      showToast(`已删除成员 ${m.role}`);
+    }
+  };
 
   // 1. 微信早报
   const handleSendTodayDigest = async () => {
@@ -77,7 +167,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   // 2. 数据导出与导入
   const handleExport = () => {
-    StorageService.exportBackup(todos);
+    StorageService.exportBackup(todos, members);
     showToast('备份文件已下载到本地！');
   };
 
@@ -91,8 +181,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       const res = StorageService.importBackup(content);
       if (res.success) {
         const freshTodos = StorageService.getTodos();
-        onImportSuccess(freshTodos);
-        showToast(`成功恢复 ${res.count || 0} 条事项！`);
+        const freshMembers = StorageService.getMembers();
+        onImportSuccess(freshTodos, freshMembers);
+        showToast(`成功恢复 ${res.count || 0} 条事项${res.membersCount ? `与 ${res.membersCount} 位成员` : ''}！`);
       } else {
         showToast(res.error || '导入失败，文件格式不正确', true);
       }
@@ -119,16 +210,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   // 统计每位成员的事项数
-  const getMemberStats = (member: FamilyMember) => {
-    const badge = getMemberBadge(member);
-    const active = todos.filter((t) => !t.done && (t.members || ['佳']).map((m) => getMemberBadge(m)).includes(badge)).length;
-    const done = todos.filter((t) => t.done && (t.members || ['佳']).map((m) => getMemberBadge(m)).includes(badge)).length;
+  const getMemberStats = (member: MemberItem) => {
+    const active = todos.filter((t) => !t.done && (t.members || ['佳']).map((m) => getMemberBadge(m, members)).includes(member.badge)).length;
+    const done = todos.filter((t) => t.done && (t.members || ['佳']).map((m) => getMemberBadge(m, members)).includes(member.badge)).length;
     return { active, done, total: active + done };
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-zinc-200 overflow-hidden flex flex-col max-h-[85vh]">
+      <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-zinc-200 overflow-hidden flex flex-col max-h-[88vh]">
         {/* 顶部标题栏 */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100">
           <div className="flex items-center gap-2">
@@ -188,45 +278,184 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
         {/* 内容展示区 */}
         <div className="p-5 overflow-y-auto space-y-4 flex-1">
-          {/* TAB 1: 人员管理 */}
+          {/* TAB 1: 人员管理 (新增、修改、删除) */}
           {activeTab === 'members' && (
-            <div className="space-y-3 animate-in fade-in duration-150">
-              <div className="text-xs text-zinc-500 flex items-center justify-between">
-                <span>核心家庭成员 (共 {MEMBERS.length} 位)</span>
-                <span className="text-[10px] text-zinc-400">专属颜色 · 事项统计</span>
+            <div className="space-y-3.5 animate-in fade-in duration-150">
+              {/* 顶部标题与新增按钮 */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-semibold text-zinc-900">家庭成员列表</div>
+                  <div className="text-[10px] text-zinc-400">共 {members.length} 位 · 点击修改或新增</div>
+                </div>
+
+                {!isEditingMember && (
+                  <button
+                    type="button"
+                    onClick={handleOpenAddMember}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-medium transition shadow-2xs active:scale-98"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>新增成员</span>
+                  </button>
+                )}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {MEMBERS.map((m) => {
-                  const color = MEMBER_COLORS[m];
+              {/* 新增 / 修改成员表单面板 */}
+              {isEditingMember && (
+                <form
+                  onSubmit={handleSaveMember}
+                  className="bg-zinc-50/90 border border-zinc-200/90 rounded-2xl p-4 space-y-3.5 animate-in zoom-in-95 duration-150"
+                >
+                  <div className="flex items-center justify-between pb-2 border-b border-zinc-200/60">
+                    <span className="text-xs font-bold text-zinc-900">
+                      {editingMemberId === 'new' ? '新增家庭成员' : '修改成员信息'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingMember(false)}
+                      className="text-zinc-400 hover:text-zinc-600 text-xs"
+                    >
+                      取消
+                    </button>
+                  </div>
+
+                  {/* 预览徽章与单字输入 */}
+                  <div className="flex items-center gap-3">
+                    <div
+                      style={{ backgroundColor: formColor.bg, color: formColor.text }}
+                      className="w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-lg shadow-2xs shrink-0 transition-colors"
+                    >
+                      {formBadge.trim() || '字'}
+                    </div>
+
+                    <div className="flex-1 space-y-2">
+                      <div>
+                        <label className="block text-[11px] font-medium text-zinc-500 mb-0.5">
+                          标志 (1~2个字)
+                        </label>
+                        <input
+                          type="text"
+                          maxLength={2}
+                          value={formBadge}
+                          onChange={(e) => setFormBadge(e.target.value)}
+                          placeholder="例如: 佳、娟、姨、猫"
+                          required
+                          className="w-full text-xs px-3 py-1.5 bg-white border border-zinc-200 rounded-lg focus:outline-hidden focus:border-zinc-900"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-medium text-zinc-500 mb-0.5">
+                          称谓 / 关系
+                        </label>
+                        <input
+                          type="text"
+                          value={formRole}
+                          onChange={(e) => setFormRole(e.target.value)}
+                          placeholder="例如: 我、配偶、阿姨、外婆"
+                          required
+                          className="w-full text-xs px-3 py-1.5 bg-white border border-zinc-200 rounded-lg focus:outline-hidden focus:border-zinc-900"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 专属调色盘 */}
+                  <div>
+                    <label className="block text-[11px] font-medium text-zinc-500 mb-1.5">
+                      选择手帐专属色
+                    </label>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {PRESET_COLORS.map((item, idx) => {
+                        const isSelected = formColor.dot === item.color.dot;
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => setFormColor(item.color)}
+                            title={item.name}
+                            style={{ backgroundColor: item.color.dot }}
+                            className={`w-6 h-6 rounded-full transition-transform flex items-center justify-center ${
+                              isSelected
+                                ? 'scale-115 ring-2 ring-zinc-900 ring-offset-2'
+                                : 'hover:scale-110 opacity-80 hover:opacity-100'
+                            }`}
+                          >
+                            {isSelected && <Check className="w-3.5 h-3.5 text-white stroke-[3]" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* 操作按钮 */}
+                  <div className="flex items-center justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingMember(false)}
+                      className="px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-200/60 rounded-xl transition"
+                    >
+                      取消
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold rounded-xl shadow-xs transition"
+                    >
+                      保存成员
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* 成员列表卡片 */}
+              <div className="grid grid-cols-1 gap-2">
+                {members.map((m) => {
                   const stats = getMemberStats(m);
-                  const roleDesc = MEMBER_CONFIG[m]?.desc || m;
                   return (
                     <div
-                      key={m}
-                      className="flex items-center justify-between p-3 rounded-xl border border-zinc-100 hover:border-zinc-200 bg-white transition"
+                      key={m.id}
+                      className="flex items-center justify-between p-3 rounded-2xl border border-zinc-200/80 bg-white hover:border-zinc-300 transition shadow-2xs"
                     >
-                      <div className="flex items-center gap-2.5">
+                      <div className="flex items-center gap-3">
                         <span
-                          style={{ backgroundColor: color.bg, color: color.text }}
-                          className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shadow-2xs"
+                          style={{ backgroundColor: m.color.bg, color: m.color.text }}
+                          className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm shadow-2xs shrink-0"
                         >
-                          {m}
+                          {m.badge}
                         </span>
                         <div>
-                          <div className="text-xs font-bold text-zinc-900 flex items-center gap-1">
-                            <span>{m}</span>
-                            <span className="text-[11px] text-zinc-400 font-normal">({roleDesc})</span>
+                          <div className="text-xs font-bold text-zinc-900 flex items-center gap-1.5">
+                            <span>{m.role}</span>
+                            <span className="text-[11px] text-zinc-400 font-normal">({m.badge})</span>
                           </div>
-                          <div className="text-[10px] text-zinc-400">家庭成员标志</div>
+                          <div className="text-[10px] text-zinc-400">
+                            {stats.active > 0 ? (
+                              <span className="text-zinc-600 font-medium">{stats.active} 项进行中待办</span>
+                            ) : (
+                              <span>暂无待办事项</span>
+                            )}
+                          </div>
                         </div>
                       </div>
 
-                      <div className="text-right">
-                        <span className="text-xs font-bold text-zinc-900">
-                          {stats.active}
-                        </span>
-                        <span className="text-[10px] text-zinc-400 ml-1">项待办</span>
+                      {/* 卡片右侧：操作按钮 */}
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditMember(m)}
+                          className="p-1.5 text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 rounded-lg transition"
+                          title="修改成员信息"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteMember(m)}
+                          className="p-1.5 text-zinc-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                          title="删除成员"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
                   );
@@ -234,7 +463,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
 
               <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-100 text-[11px] text-zinc-500 leading-relaxed">
-                💡 <b>提示：</b>在新增或编辑事项时，可同时勾选多个家庭成员（例如“我”和“配偶”一起办某件事）。后续可在设置中扩充更多家庭成员或自定义生活照。
+                💡 <b>温馨提示：</b>新增或修改成员后，日历圆点、记事弹窗多选胶囊与待办徽章将全自动同步适配。
               </div>
             </div>
           )}
@@ -313,12 +542,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 type="button"
                 onClick={async () => {
                   showToast('正在从云端拉取最新数据...');
-                  const res = await SyncService.fetchCloudTodos();
+                  const res = await SyncService.fetchCloudData();
                   if (res.success && res.data) {
-                    const merged = SyncService.mergeTodos(todos, res.data);
-                    StorageService.saveTodos(merged);
-                    onImportSuccess(merged);
-                    showToast(`云端同步成功，共 ${merged.length} 条事项`);
+                    const mergedTodos = SyncService.mergeTodos(todos, res.data.todos);
+                    StorageService.saveTodos(mergedTodos);
+
+                    let mergedMembers = members;
+                    if (res.data.members && res.data.members.length > 0) {
+                      mergedMembers = SyncService.mergeMembers(members, res.data.members);
+                      StorageService.saveMembers(mergedMembers);
+                      onUpdateMembers(mergedMembers);
+                    }
+
+                    onImportSuccess(mergedTodos, mergedMembers);
+                    showToast(`云端同步成功，共 ${mergedTodos.length} 条事项`);
                   } else {
                     showToast(res.error || '云端同步失败', true);
                   }
@@ -333,7 +570,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-3.5 space-y-2">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-medium text-zinc-700">本地离线双保险</span>
-                  <span className="font-bold text-zinc-900">{todos.length} 条事项</span>
+                  <span className="font-bold text-zinc-900">{todos.length} 条事项 · {members.length} 位成员</span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 pt-1">
@@ -380,7 +617,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         {/* 底部版权/提示 */}
         <div className="px-5 py-3 bg-zinc-50 border-t border-zinc-100 text-[11px] text-zinc-400 text-center flex items-center justify-between">
           <span>亲邻记事 · 家庭事务中心</span>
-          <span className="text-[10px] text-zinc-400">v1.2 稳定版</span>
+          <span className="text-[10px] text-zinc-400">v1.3 动态成员版</span>
         </div>
       </div>
     </div>

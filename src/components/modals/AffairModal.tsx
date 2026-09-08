@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { TodoItem, FamilyMember, MEMBERS, MEMBER_CONFIG, getMemberBadge } from '../../types';
+import { TodoItem, MemberItem, getMemberBadge } from '../../types';
 import { getTodayStr } from '../../utils/dateUtils';
 import { X, Trash2, Calendar, Bell, Check } from 'lucide-react';
 import { addDays, format, parseISO, differenceInCalendarDays } from 'date-fns';
@@ -11,6 +11,7 @@ interface AffairModalProps {
   onDelete?: (id: string) => void;
   editingItem?: TodoItem | null;
   initialDate?: string;
+  members: MemberItem[];
 }
 
 export const AffairModal: React.FC<AffairModalProps> = ({
@@ -20,15 +21,17 @@ export const AffairModal: React.FC<AffairModalProps> = ({
   onDelete,
   editingItem,
   initialDate,
+  members,
 }) => {
   if (!isOpen) return null;
 
+  const defaultBadge = members?.[0]?.badge || '佳';
   const todayStr = getTodayStr();
   const tomorrowStr = format(addDays(new Date(), 1), 'yyyy-MM-dd');
   const afterTomorrowStr = format(addDays(new Date(), 2), 'yyyy-MM-dd');
 
   const [title, setTitle] = useState('');
-  const [selectedMembers, setSelectedMembers] = useState<FamilyMember[]>(['佳']);
+  const [selectedMembers, setSelectedMembers] = useState<string[]>([defaultBadge]);
   const [isRangeMode, setIsRangeMode] = useState(false);
   const [startDate, setStartDate] = useState(initialDate || todayStr);
   const [endDate, setEndDate] = useState(initialDate || todayStr);
@@ -37,8 +40,8 @@ export const AffairModal: React.FC<AffairModalProps> = ({
   useEffect(() => {
     if (editingItem) {
       setTitle(editingItem.title);
-      const normalized = (editingItem.members || ['佳']).map((m) => getMemberBadge(m));
-      setSelectedMembers(normalized as FamilyMember[]);
+      const normalized = (editingItem.members || [defaultBadge]).map((m) => getMemberBadge(m, members));
+      setSelectedMembers(normalized);
       setStartDate(editingItem.date);
       const hasRange = Boolean(editingItem.endDate && editingItem.endDate > editingItem.date);
       setIsRangeMode(hasRange);
@@ -46,25 +49,25 @@ export const AffairModal: React.FC<AffairModalProps> = ({
       setRemindWechat(editingItem.remindWechat || false);
     } else {
       setTitle('');
-      setSelectedMembers(['佳']);
+      setSelectedMembers([defaultBadge]);
       const initD = initialDate || todayStr;
       setStartDate(initD);
       setEndDate(initD);
       setIsRangeMode(false); // 默认一天
       setRemindWechat(false);
     }
-  }, [editingItem, initialDate, isOpen, todayStr]);
+  }, [editingItem, initialDate, isOpen, todayStr, defaultBadge, members]);
 
   // 切换成员多选
-  const handleToggleMember = (m: FamilyMember) => {
+  const handleToggleMember = (badge: string) => {
     setSelectedMembers((prev) => {
-      if (prev.includes(m)) {
+      if (prev.includes(badge)) {
         if (prev.length > 1) {
-          return prev.filter((item) => item !== m);
+          return prev.filter((item) => item !== badge);
         }
         return prev;
       } else {
-        return [...prev, m];
+        return [...prev, badge];
       }
     });
   };
@@ -147,24 +150,30 @@ export const AffairModal: React.FC<AffairModalProps> = ({
               </span>
             </div>
             <div className="flex flex-wrap gap-1.5">
-              {MEMBERS.map((m) => {
-                const selected = selectedMembers.includes(m);
-                const roleDesc = MEMBER_CONFIG[m]?.desc || m;
+              {members.map((m) => {
+                const selected = selectedMembers.includes(m.badge);
                 return (
                   <button
-                    key={m}
+                    key={m.id}
                     type="button"
-                    onClick={() => handleToggleMember(m)}
+                    onClick={() => handleToggleMember(m.badge)}
                     className={`px-3 py-1.5 rounded-full text-xs font-medium border transition flex items-center gap-1.5 ${
                       selected
                         ? 'bg-zinc-900 text-white border-zinc-900 shadow-2xs'
                         : 'bg-zinc-50 text-zinc-700 border-zinc-200 hover:bg-zinc-100'
                     }`}
                   >
-                    {selected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                    <span className="font-bold text-xs">{m}</span>
+                    {selected ? (
+                      <Check className="w-2.5 h-2.5 stroke-[3]" />
+                    ) : (
+                      <span
+                        style={{ backgroundColor: m.color.dot }}
+                        className="w-1.5 h-1.5 rounded-full inline-block"
+                      />
+                    )}
+                    <span className="font-bold text-xs">{m.badge}</span>
                     <span className={`text-[10px] ${selected ? 'text-zinc-300' : 'text-zinc-400'}`}>
-                      {roleDesc}
+                      {m.role}
                     </span>
                   </button>
                 );

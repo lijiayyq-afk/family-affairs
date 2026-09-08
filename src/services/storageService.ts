@@ -1,8 +1,9 @@
-import { TodoItem } from '../types';
+import { TodoItem, MemberItem, DEFAULT_MEMBERS } from '../types';
 import { getInitialTodos } from '../constants/initialData';
 
 // 永久固定的主键，永远不再更改
 const PRIMARY_KEY = 'family_affairs_todos_master';
+const MEMBERS_PRIMARY_KEY = 'family_affairs_members_master';
 const HAS_INITIALIZED_KEY = 'family_affairs_has_initialized';
 
 // 历史曾经使用过的键名，按新到旧排列，用于升级时自动抢救迁移数据
@@ -103,16 +104,52 @@ export class StorageService {
   }
 
   /**
-   * 导出 JSON 数据备份文件
+   * 读取家庭成员列表：
+   * 1. 优先从 MEMBERS_PRIMARY_KEY 获取
+   * 2. 若无则初始化为 DEFAULT_MEMBERS 并写入本地
    */
-  static exportBackup(todos: TodoItem[]): void {
+  static getMembers(): MemberItem[] {
     try {
+      const raw = localStorage.getItem(MEMBERS_PRIMARY_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+      // 默认初始化
+      this.saveMembers(DEFAULT_MEMBERS);
+      return DEFAULT_MEMBERS;
+    } catch (e) {
+      console.error('[StorageService] 读取成员失败:', e);
+      return DEFAULT_MEMBERS;
+    }
+  }
+
+  /**
+   * 保存家庭成员列表
+   */
+  static saveMembers(members: MemberItem[]): void {
+    try {
+      localStorage.setItem(MEMBERS_PRIMARY_KEY, JSON.stringify(members));
+    } catch (e) {
+      console.error('[StorageService] 保存成员失败:', e);
+    }
+  }
+
+  /**
+   * 导出 JSON 数据备份文件（包含事项与人员配置）
+   */
+  static exportBackup(todos: TodoItem[], members?: MemberItem[]): void {
+    try {
+      const currentMembers = members || this.getMembers();
       const backupData = {
         app: 'family-affairs',
-        version: '1.0',
+        version: '1.2',
         exportedAt: new Date().toISOString(),
         count: todos.length,
         data: todos,
+        members: currentMembers,
       };
 
       const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
@@ -134,22 +171,35 @@ export class StorageService {
   /**
    * 导入恢复 JSON 数据
    */
-  static importBackup(jsonStr: string): { success: boolean; count?: number; error?: string } {
+  static importBackup(jsonStr: string): { success: boolean; count?: number; membersCount?: number; error?: string } {
     try {
       const parsed = JSON.parse(jsonStr);
       let itemsToImport: any[] = [];
+      let membersToImport: MemberItem[] | undefined;
 
       if (Array.isArray(parsed)) {
         itemsToImport = parsed;
       } else if (parsed && Array.isArray(parsed.data)) {
         itemsToImport = parsed.data;
+        if (Array.isArray(parsed.members)) {
+          membersToImport = parsed.members;
+        }
       } else {
         return { success: false, error: '无效的备份文件格式' };
       }
 
       const normalized = normalizeTodos(itemsToImport);
       this.saveTodos(normalized);
-      return { success: true, count: normalized.length };
+
+      if (membersToImport && membersToImport.length > 0) {
+        this.saveMembers(membersToImport);
+      }
+
+      return { 
+        success: true, 
+        count: normalized.length, 
+        membersCount: membersToImport ? membersToImport.length : undefined 
+      };
     } catch (err: any) {
       return { success: false, error: err.message || 'JSON 解析失败' };
     }

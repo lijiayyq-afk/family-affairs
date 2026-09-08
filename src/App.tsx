@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { TodoItem, ActiveTab } from './types';
+import { TodoItem, MemberItem, ActiveTab } from './types';
 import { StorageService } from './services/storageService';
 import { SyncService, SyncStatus } from './services/syncService';
 import { PushPlusService } from './services/pushPlusService';
@@ -11,6 +11,7 @@ import { Plus, Check, AlertCircle, Cloud, RefreshCw, Settings } from 'lucide-rea
 
 export function App() {
   const [todos, setTodos] = useState<TodoItem[]>(() => StorageService.getTodos());
+  const [members, setMembers] = useState<MemberItem[]>(() => StorageService.getMembers());
   const [activeTab, setActiveTab] = useState<ActiveTab>('todos');
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
 
@@ -29,25 +30,29 @@ export function App() {
     }, 2500);
   }, []);
 
-  // 首屏挂载：静默自动拉取云端数据，多端智能合并
+  // 首屏挂载：静默自动拉取云端数据，多端智能合并待办与家庭成员
   useEffect(() => {
     let isMounted = true;
     setSyncStatus('syncing');
 
-    SyncService.fetchCloudTodos().then((res) => {
+    SyncService.fetchCloudData().then((res) => {
       if (!isMounted) return;
       if (res.success && res.data) {
         setTodos((localTodos) => {
-          const merged = SyncService.mergeTodos(localTodos, res.data!);
+          const merged = SyncService.mergeTodos(localTodos, res.data!.todos);
           StorageService.saveTodos(merged);
-          // 若本地有云端没有的数据，顺手同步上云
-          if (merged.length !== res.data!.length) {
-            SyncService.triggerCloudSync(merged, setSyncStatus);
-          } else {
-            setSyncStatus('synced');
-          }
           return merged;
         });
+
+        if (res.data.members && res.data.members.length > 0) {
+          setMembers((localMembers) => {
+            const merged = SyncService.mergeMembers(localMembers, res.data!.members);
+            StorageService.saveMembers(merged);
+            return merged;
+          });
+        }
+
+        setSyncStatus('synced');
       } else {
         setSyncStatus('idle');
       }
@@ -58,11 +63,12 @@ export function App() {
     };
   }, []);
 
-  // 本地与云端持久化双写
+  // 本地与云端持久化双写（待办与家庭成员）
   useEffect(() => {
     StorageService.saveTodos(todos);
-    SyncService.triggerCloudSync(todos, setSyncStatus);
-  }, [todos]);
+    StorageService.saveMembers(members);
+    SyncService.triggerCloudSync(todos, members, setSyncStatus);
+  }, [todos, members]);
 
   const activeCount = useMemo(() => todos.filter((t) => !t.done).length, [todos]);
 
@@ -196,6 +202,7 @@ export function App() {
         {activeTab === 'todos' && (
           <TodoView
             todos={todos}
+            members={members}
             onToggle={handleToggle}
             onDelete={handleDelete}
             onEdit={(item) => {
@@ -215,6 +222,7 @@ export function App() {
         {activeTab === 'calendar' && (
           <CalendarView
             todos={todos}
+            members={members}
             onSelectDate={(dateStr) => {
               setEditingItem(null);
               setModalDate(dateStr);
@@ -240,6 +248,7 @@ export function App() {
         onDelete={handleDelete}
         editingItem={editingItem}
         initialDate={modalDate}
+        members={members}
       />
 
       {/* 家庭设置与管理弹窗 (数据备份、微信早报、人员管理) */}
@@ -247,7 +256,14 @@ export function App() {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         todos={todos}
-        onImportSuccess={(newTodos) => setTodos(newTodos)}
+        members={members}
+        onUpdateMembers={(newMembers) => setMembers(newMembers)}
+        onImportSuccess={(newTodos, newMembers) => {
+          setTodos(newTodos);
+          if (newMembers && newMembers.length > 0) {
+            setMembers(newMembers);
+          }
+        }}
         showToast={showToast}
       />
 

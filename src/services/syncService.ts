@@ -1,14 +1,19 @@
-import { TodoItem } from '../types';
+import { TodoItem, MemberItem } from '../types';
 
 export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error';
+
+export interface CloudDataPayload {
+  todos: TodoItem[];
+  members?: MemberItem[];
+}
 
 export class SyncService {
   private static debounceTimer: any = null;
 
   /**
-   * 从云端拉取待办事项列表
+   * 从云端拉取待办事项与人员配置
    */
-  static async fetchCloudTodos(): Promise<{ success: boolean; data?: TodoItem[]; error?: string }> {
+  static async fetchCloudData(): Promise<{ success: boolean; data?: CloudDataPayload; error?: string }> {
     try {
       const res = await fetch('/api/todos', {
         method: 'GET',
@@ -20,8 +25,17 @@ export class SyncService {
       }
 
       const json = await res.json();
-      if (json.code === 200 && Array.isArray(json.data)) {
-        return { success: true, data: json.data };
+      if (json.code === 200 && json.data) {
+        if (Array.isArray(json.data)) {
+          return { success: true, data: { todos: json.data } };
+        }
+        return { 
+          success: true, 
+          data: { 
+            todos: Array.isArray(json.data.todos) ? json.data.todos : [],
+            members: Array.isArray(json.data.members) ? json.data.members : undefined
+          } 
+        };
       }
       return { success: false, error: json.msg || '数据解析异常' };
     } catch (e: any) {
@@ -30,9 +44,24 @@ export class SyncService {
   }
 
   /**
-   * 将待办事项保存同步到云端 (带防抖)
+   * 兼容旧版调用的别名
    */
-  static triggerCloudSync(todos: TodoItem[], onStatusChange?: (status: SyncStatus) => void): void {
+  static async fetchCloudTodos(): Promise<{ success: boolean; data?: TodoItem[]; members?: MemberItem[]; error?: string }> {
+    const res = await this.fetchCloudData();
+    if (res.success && res.data) {
+      return { success: true, data: res.data.todos, members: res.data.members };
+    }
+    return { success: false, error: res.error };
+  }
+
+  /**
+   * 将待办事项与成员配置同步到云端 (带防抖)
+   */
+  static triggerCloudSync(
+    todos: TodoItem[], 
+    members?: MemberItem[], 
+    onStatusChange?: (status: SyncStatus) => void
+  ): void {
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
     }
@@ -41,12 +70,17 @@ export class SyncService {
 
     this.debounceTimer = setTimeout(async () => {
       try {
+        const payload: any = { todos };
+        if (members && members.length > 0) {
+          payload.members = members;
+        }
+
         const res = await fetch('/api/todos', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(todos),
+          body: JSON.stringify(payload),
         });
 
         if (res.ok) {
@@ -61,10 +95,7 @@ export class SyncService {
   }
 
   /**
-   * 智能合并本地与云端数据：
-   * 1. 优先以 ID 唯一识别
-   * 2. 两端都有的新增项全部保留
-   * 3. 冲突项以创建时间或存在为准
+   * 智能合并本地与云端待办事项
    */
   static mergeTodos(local: TodoItem[], cloud: TodoItem[]): TodoItem[] {
     const map = new Map<string, TodoItem>();
@@ -80,6 +111,30 @@ export class SyncService {
     local.forEach((item) => {
       if (item && item.id) {
         map.set(item.id, item);
+      }
+    });
+
+    return Array.from(map.values());
+  }
+
+  /**
+   * 智能合并本地与云端家庭成员列表
+   */
+  static mergeMembers(local: MemberItem[], cloud?: MemberItem[]): MemberItem[] {
+    if (!cloud || cloud.length === 0) return local;
+    const map = new Map<string, MemberItem>();
+
+    // 先放云端
+    cloud.forEach((m) => {
+      if (m && m.id) {
+        map.set(m.id, m);
+      }
+    });
+
+    // 本地优先覆盖（以便离线修改即时保留）
+    local.forEach((m) => {
+      if (m && m.id) {
+        map.set(m.id, m);
       }
     });
 

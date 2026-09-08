@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { TodoItem, getMemberBadge } from '../../types';
-import { MEMBER_COLORS } from '../../constants/initialData';
+import { TodoItem, MemberItem, getMemberBadge, getMemberColor } from '../../types';
 import { formatHumanDate, getDateRangeDays, formatTodoDateRange } from '../../utils/dateUtils';
 import {
   format,
@@ -20,6 +19,7 @@ import confetti from 'canvas-confetti';
 
 interface CalendarViewProps {
   todos: TodoItem[];
+  members: MemberItem[];
   onSelectDate: (dateStr: string) => void;
   onSelectEvent: (item: TodoItem) => void;
   onToggleStatus: (id: string) => void;
@@ -29,6 +29,7 @@ interface CalendarViewProps {
 
 export const CalendarView: React.FC<CalendarViewProps> = ({
   todos,
+  members,
   onSelectDate,
   onSelectEvent,
   onToggleStatus,
@@ -179,12 +180,12 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 {/* 事项小圆点（彻底解决文字拥挤问题） */}
                 <div className="h-1.5 flex items-center justify-center gap-0.5 mt-0.5">
                   {dayTodos.slice(0, 3).map((t, idx) => {
-                    const firstMember = getMemberBadge(t.members?.[0] || '佳');
-                    const color = MEMBER_COLORS[firstMember]?.dot || '#71717a';
+                    const firstMember = t.members?.[0] || '佳';
+                    const color = getMemberColor(firstMember, members);
                     return (
                       <span
                         key={idx}
-                        style={{ backgroundColor: isSelected ? '#ffffff' : color }}
+                        style={{ backgroundColor: isSelected ? '#ffffff' : color.dot }}
                         className={`w-1 h-1 rounded-full ${t.done ? 'opacity-40' : ''}`}
                       />
                     );
@@ -278,8 +279,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                   <div className="flex items-center gap-1.5 shrink-0">
                     <div className="flex items-center gap-1">
                       {(item.members || ['佳']).map((rawMem) => {
-                        const badge = getMemberBadge(rawMem);
-                        const color = MEMBER_COLORS[badge] || MEMBER_COLORS[rawMem] || { bg: '#f4f4f5', text: '#52525b' };
+                        const badge = getMemberBadge(rawMem, members);
+                        const color = getMemberColor(rawMem, members);
                         return (
                           <span
                             key={rawMem}
