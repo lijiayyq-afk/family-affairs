@@ -1,8 +1,9 @@
 import React, { useState, useRef } from 'react';
-import { TodoItem, MemberItem, MemberColor, PRESET_COLORS, getMemberBadge } from '../../types';
+import { TodoItem, MemberItem, MemberColor, DeletedTodoItem, PRESET_COLORS, getMemberBadge, getMemberColor } from '../../types';
 import { StorageService } from '../../services/storageService';
 import { SyncService } from '../../services/syncService';
 import { PushPlusService } from '../../services/pushPlusService';
+import { formatTodoDateRange } from '../../utils/dateUtils';
 import {
   X,
   Settings,
@@ -21,6 +22,7 @@ import {
   Eye,
   Clock,
   Sparkles,
+  RotateCcw,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -29,20 +31,45 @@ interface SettingsModalProps {
   onClose: () => void;
   todos: TodoItem[];
   members: MemberItem[];
+  deletedTodos: DeletedTodoItem[];
   onUpdateMembers: (members: MemberItem[]) => void;
   onImportSuccess: (todos: TodoItem[], members?: MemberItem[]) => void;
+  onRestoreTodo: (todo: DeletedTodoItem) => void;
+  onClearRecycleBin: () => void;
+  onPermanentDelete: (id: string) => void;
   showToast: (text: string, error?: boolean) => void;
 }
 
-type SettingsTab = 'members' | 'wechat' | 'backup';
+type SettingsTab = 'members' | 'wechat' | 'backup' | 'trash';
+
+// 相对删除时间格式化
+function formatRelativeTime(isoStr: string): string {
+  try {
+    const diffMs = Date.now() - new Date(isoStr).getTime();
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    if (diffMinutes < 1) return '刚刚删除';
+    if (diffMinutes < 60) return `${diffMinutes} 分钟前删除`;
+    const diffHours = Math.floor(diffMinutes / 60);
+    if (diffHours < 24) return `${diffHours} 小时前删除`;
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays < 7) return `${diffDays} 天前删除`;
+    return isoStr.slice(5, 10);
+  } catch {
+    return '已删除';
+  }
+}
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
   onClose,
   todos,
   members,
+  deletedTodos,
   onUpdateMembers,
   onImportSuccess,
+  onRestoreTodo,
+  onClearRecycleBin,
+  onPermanentDelete,
   showToast,
 }) => {
   const [activeTab, setActiveTab] = useState<SettingsTab>('members');
@@ -65,7 +92,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setFormBadge('');
     setFormRole('');
     // 自动轮换预设颜色，避免每个人都一个颜色
-    const nextColor = PRESET_COLORS[members.length % PRESET_COLORS.length].color;
+    const nextColor = (members && members.length > 0)
+      ? (PRESET_COLORS[members.length % PRESET_COLORS.length]?.color || PRESET_COLORS[0].color)
+      : PRESET_COLORS[0].color;
     setFormColor(nextColor);
     setIsEditingMember(true);
   };
@@ -73,9 +102,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   // 开启修改成员表单
   const handleOpenEditMember = (m: MemberItem) => {
     setEditingMemberId(m.id);
-    setFormBadge(m.badge);
-    setFormRole(m.role);
-    setFormColor(m.color);
+    setFormBadge(m.badge || '');
+    setFormRole(m.role || '');
+    const color = (m?.color && m.color.bg) ? m.color : getMemberColor(m?.badge || '', members);
+    setFormColor(color);
     setIsEditingMember(true);
   };
 
@@ -216,8 +246,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   // 统计每位成员的事项数
   const getMemberStats = (member: MemberItem) => {
-    const active = todos.filter((t) => !t.done && (t.members || ['佳']).map((m) => getMemberBadge(m, members)).includes(member.badge)).length;
-    const done = todos.filter((t) => t.done && (t.members || ['佳']).map((m) => getMemberBadge(m, members)).includes(member.badge)).length;
+    if (!member || !member.badge) return { active: 0, done: 0, total: 0 };
+    const b = member.badge;
+    const active = todos.filter((t) => !t.done && (t.members || ['佳']).map((m) => getMemberBadge(m, members)).includes(b)).length;
+    const done = todos.filter((t) => t.done && (t.members || ['佳']).map((m) => getMemberBadge(m, members)).includes(b)).length;
     return { active, done, total: active + done };
   };
 
@@ -279,6 +311,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <Database className="w-3.5 h-3.5" />
             <span>数据备份</span>
           </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('trash')}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium rounded-xl transition ${
+              activeTab === 'trash'
+                ? 'bg-white text-zinc-900 shadow-2xs font-semibold'
+                : 'text-zinc-500 hover:text-zinc-800'
+            }`}
+          >
+            <RotateCcw className="w-3.5 h-3.5 text-zinc-600" />
+            <span>回收站</span>
+            {deletedTodos.length > 0 && (
+              <span className="text-[9px] bg-zinc-200 text-zinc-700 font-bold px-1.5 py-0.2 rounded-full">
+                {deletedTodos.length}
+              </span>
+            )}
+          </button>
         </div>
 
         {/* 内容展示区 */}
@@ -327,7 +377,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   {/* 预览徽章与单字输入 */}
                   <div className="flex items-center gap-3">
                     <div
-                      style={{ backgroundColor: formColor.bg, color: formColor.text }}
+                      style={{ 
+                        backgroundColor: formColor?.bg || '#f1f5f9', 
+                        color: formColor?.text || '#334155' 
+                      }}
                       className="w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-lg shadow-2xs shrink-0 transition-colors"
                     >
                       {formBadge.trim() || '字'}
@@ -372,7 +425,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </label>
                     <div className="flex items-center gap-2 flex-wrap">
                       {PRESET_COLORS.map((item, idx) => {
-                        const isSelected = formColor.dot === item.color.dot;
+                        const isSelected = formColor?.dot === item.color.dot;
                         return (
                           <button
                             key={idx}
@@ -414,24 +467,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
               {/* 成员列表卡片 */}
               <div className="grid grid-cols-1 gap-2">
-                {members.map((m) => {
+                {members.map((m, idx) => {
                   const stats = getMemberStats(m);
+                  const mColor = (m?.color && m.color.bg) ? m.color : getMemberColor(m?.badge || '', members);
+                  const badge = m?.badge || '佳';
+                  const role = m?.role || '家人';
                   return (
                     <div
-                      key={m.id}
+                      key={m.id || `m_${idx}`}
                       className="flex items-center justify-between p-3 rounded-2xl border border-zinc-200/80 bg-white hover:border-zinc-300 transition shadow-2xs"
                     >
                       <div className="flex items-center gap-3">
                         <span
-                          style={{ backgroundColor: m.color.bg, color: m.color.text }}
+                          style={{ backgroundColor: mColor.bg, color: mColor.text }}
                           className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm shadow-2xs shrink-0"
                         >
-                          {m.badge}
+                          {badge}
                         </span>
                         <div>
                           <div className="text-xs font-bold text-zinc-900 flex items-center gap-1.5">
-                            <span>{m.role}</span>
-                            <span className="text-[11px] text-zinc-400 font-normal">({m.badge})</span>
+                            <span>{role}</span>
+                            <span className="text-[11px] text-zinc-400 font-normal">({badge})</span>
                           </div>
                           <div className="text-[10px] text-zinc-400">
                             {stats.active > 0 ? (
@@ -643,6 +699,133 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>一键清理已完成的事项</span>
               </button>
+            </div>
+          )}
+
+          {/* TAB 4: 防误删回收站（可随时一键还原） */}
+          {activeTab === 'trash' && (
+            <div className="space-y-3.5 animate-in fade-in duration-150">
+              {/* 顶部统计与清空操作栏 */}
+              <div className="flex items-center justify-between pb-1">
+                <div>
+                  <div className="text-xs font-semibold text-zinc-900 flex items-center gap-1.5">
+                    <span>防误删回收站</span>
+                    {deletedTodos.length > 0 && (
+                      <span className="text-[10px] bg-zinc-200/80 text-zinc-700 px-1.5 py-0.2 rounded-full font-bold">
+                        {deletedTodos.length}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[10px] text-zinc-400">
+                    平时删除的事项自动暂存，随时可一键还原
+                  </div>
+                </div>
+
+                {deletedTodos.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm(`确定要清空回收站全部 ${deletedTodos.length} 条已删事项吗？\n清空后将无法再次找回。`)) {
+                        onClearRecycleBin();
+                        showToast('已清空回收站');
+                      }
+                    }}
+                    className="text-xs text-rose-500 hover:text-rose-700 hover:bg-rose-50 px-2.5 py-1 rounded-lg transition"
+                  >
+                    清空回收站
+                  </button>
+                )}
+              </div>
+
+              {/* 回收站为空时的友好提示 */}
+              {deletedTodos.length === 0 ? (
+                <div className="py-12 text-center space-y-2.5 bg-zinc-50/70 rounded-2xl border border-dashed border-zinc-200">
+                  <div className="w-10 h-10 rounded-full bg-white text-zinc-400 flex items-center justify-center mx-auto shadow-2xs">
+                    <RotateCcw className="w-4 h-4 text-zinc-400" />
+                  </div>
+                  <div className="text-xs font-semibold text-zinc-700">回收站空空如也</div>
+                  <p className="text-[11px] text-zinc-400 max-w-xs mx-auto px-4 leading-relaxed">
+                    在待办清单或日历中误删的任何事项，都会安全存放在这里，随时可以一键恢复~
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-0.5">
+                  {deletedTodos.map((item) => {
+                    const dateInfo = formatTodoDateRange(item.date, item.endDate);
+                    return (
+                      <div
+                        key={item.id}
+                        className="p-3 bg-white border border-zinc-200/80 rounded-2xl flex items-center justify-between gap-3 shadow-2xs hover:border-zinc-300 transition"
+                      >
+                        {/* 事项信息 */}
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div className="text-xs font-medium text-zinc-800 truncate">
+                            {item.title}
+                          </div>
+
+                          <div className="flex items-center gap-1.5 text-[10px] text-zinc-400 flex-wrap">
+                            {/* 关联成员徽章 */}
+                            <div className="flex items-center gap-1">
+                              {(item.members || ['佳']).map((rawMem) => {
+                                const badge = getMemberBadge(rawMem, members);
+                                const color = getMemberColor(rawMem, members);
+                                return (
+                                  <span
+                                    key={rawMem}
+                                    style={{ backgroundColor: color.bg, color: color.text }}
+                                    className="px-1.5 py-0.2 rounded font-bold text-[9px] shadow-2xs"
+                                  >
+                                    {badge}
+                                  </span>
+                                );
+                              })}
+                            </div>
+
+                            <span>·</span>
+                            <span>原定: {dateInfo.label}</span>
+                            <span>·</span>
+                            <span className="text-zinc-400">{formatRelativeTime(item.deletedAt)}</span>
+                          </div>
+                        </div>
+
+                        {/* 右侧：还原与彻底删除 */}
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onRestoreTodo(item);
+                              showToast(`已成功还原【${item.title}】`);
+                            }}
+                            className="flex items-center gap-1 px-2.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl text-xs font-medium transition shadow-2xs active:scale-95"
+                            title="恢复到待办列表"
+                          >
+                            <RotateCcw className="w-3 h-3 text-emerald-400" />
+                            <span>还原</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (confirm(`确定要彻底删除“${item.title}”吗？此操作无法撤销。`)) {
+                                onPermanentDelete(item.id);
+                                showToast('已彻底删除');
+                              }
+                            }}
+                            className="p-1.5 text-zinc-300 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                            title="彻底删除"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-100 text-[11px] text-zinc-500 leading-relaxed">
+                🛡️ <b>防误删机制已生效：</b>被删除的事项会保留原有的时间段、已完成状态以及所属家庭成员信息，还原后即可直接在待办与日历中照常显示。
+              </div>
             </div>
           )}
         </div>

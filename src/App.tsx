@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { TodoItem, MemberItem, ActiveTab } from './types';
+import { TodoItem, MemberItem, DeletedTodoItem, ActiveTab, DEFAULT_MEMBERS } from './types';
 import { StorageService } from './services/storageService';
 import { SyncService, SyncStatus } from './services/syncService';
 import { PushPlusService } from './services/pushPlusService';
@@ -9,9 +9,67 @@ import { AffairModal } from './components/modals/AffairModal';
 import { SettingsModal } from './components/modals/SettingsModal';
 import { Plus, Check, AlertCircle, Cloud, RefreshCw, Settings } from 'lucide-react';
 
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error?: Error;
+}
+
+// 防白屏全局错误边界：捕获任何意外运行时异常，保障数据完整
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('[ErrorBoundary] 捕获渲染异常:', error, errorInfo);
+  }
+
+  handleReset = () => {
+    // 自动清洗成员配置与本地数据
+    StorageService.saveMembers(DEFAULT_MEMBERS);
+    this.setState({ hasError: false });
+    window.location.reload();
+  };
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-[#faf9f6] flex items-center justify-center p-4">
+          <div className="bg-white max-w-sm w-full p-6 rounded-3xl border border-zinc-200 shadow-xl text-center space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto text-xl font-bold">
+              🛡️
+            </div>
+            <div className="space-y-1">
+              <h3 className="font-bold text-zinc-900 text-sm">页面遇到了一个小插曲</h3>
+              <p className="text-xs text-zinc-400">已启用防白屏安全保护，你的所有待办数据完好无损。</p>
+            </div>
+            <button
+              onClick={this.handleReset}
+              className="w-full py-2.5 px-4 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold rounded-xl transition shadow-xs"
+            >
+              🔄 一键修复并刷新
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export function App() {
   const [todos, setTodos] = useState<TodoItem[]>(() => StorageService.getTodos());
   const [members, setMembers] = useState<MemberItem[]>(() => StorageService.getMembers());
+  const [deletedTodos, setDeletedTodos] = useState<DeletedTodoItem[]>(() => StorageService.getDeletedTodos());
   const [activeTab, setActiveTab] = useState<ActiveTab>('todos');
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
 
@@ -70,6 +128,11 @@ export function App() {
     SyncService.triggerCloudSync(todos, members, setSyncStatus);
   }, [todos, members]);
 
+  // 回收站数据本地持久化
+  useEffect(() => {
+    StorageService.saveDeletedTodos(deletedTodos);
+  }, [deletedTodos]);
+
   const activeCount = useMemo(() => todos.filter((t) => !t.done).length, [todos]);
 
   // 保存事项（新增或修改）
@@ -94,10 +157,46 @@ export function App() {
     );
   };
 
-  // 删除事项
+  // 防误删：删除事项（移入回收站，不在待办和日历显示，但可随时还原）
   const handleDelete = (id: string) => {
-    setTodos((prev) => prev.filter((t) => t.id !== id));
-    showToast('已删除事项');
+    const target = todos.find((t) => t.id === id);
+    if (target) {
+      // 从待办列表中移除
+      setTodos((prev) => prev.filter((t) => t.id !== id));
+      // 移入回收站并记录当前时间
+      setDeletedTodos((prev) => [
+        { ...target, deletedAt: new Date().toISOString() },
+        ...prev.filter((t) => t.id !== id),
+      ]);
+      showToast('已移入回收站，可在设置中还原');
+    }
+  };
+
+  // 一键还原已删事项
+  const handleRestoreTodo = (item: DeletedTodoItem) => {
+    const { deletedAt, ...todoData } = item;
+    // 从回收站移除
+    setDeletedTodos((prev) => prev.filter((t) => t.id !== item.id));
+    // 恢复到待办列表
+    setTodos((prev) => {
+      const exists = prev.some((t) => t.id === todoData.id);
+      if (exists) {
+        return prev.map((t) => (t.id === todoData.id ? todoData : t));
+      }
+      return [todoData, ...prev];
+    });
+  };
+
+  // 清空回收站
+  const handleClearRecycleBin = () => {
+    setDeletedTodos([]);
+    StorageService.clearRecycleBin();
+  };
+
+  // 从回收站彻底永久删除单条
+  const handlePermanentDelete = (id: string) => {
+    setDeletedTodos((prev) => prev.filter((t) => t.id !== id));
+    StorageService.deletePermanently(id);
   };
 
   return (
@@ -230,19 +329,24 @@ export function App() {
         members={members}
       />
 
-      {/* 家庭设置与管理弹窗 (数据备份、微信早报、人员管理) */}
+      {/* 家庭设置与管理弹窗 (数据备份、微信早报、人员管理、防误删回收站) */}
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         todos={todos}
         members={members}
+        deletedTodos={deletedTodos}
         onUpdateMembers={(newMembers) => setMembers(newMembers)}
         onImportSuccess={(newTodos, newMembers) => {
           setTodos(newTodos);
           if (newMembers && newMembers.length > 0) {
             setMembers(newMembers);
           }
+          setDeletedTodos(StorageService.getDeletedTodos());
         }}
+        onRestoreTodo={handleRestoreTodo}
+        onClearRecycleBin={handleClearRecycleBin}
+        onPermanentDelete={handlePermanentDelete}
         showToast={showToast}
       />
 
@@ -261,4 +365,10 @@ export function App() {
   );
 }
 
-export default App;
+export default function SafeApp() {
+  return (
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
+  );
+}

@@ -77,11 +77,11 @@ export function getMemberLabel(m: string, members?: MemberItem[]): string {
 export function getMemberColor(m: string, members?: MemberItem[]): MemberColor {
   if (members && members.length > 0) {
     const found = members.find((item) => item.badge === m || item.role === m || item.id === m);
-    if (found) return found.color;
+    if (found && found.color && found.color.bg) return found.color;
   }
   const badge = getMemberBadge(m, members);
   const defaultFound = DEFAULT_MEMBERS.find((item) => item.badge === badge);
-  return defaultFound ? defaultFound.color : PRESET_COLORS[0].color;
+  return defaultFound && defaultFound.color && defaultFound.color.bg ? defaultFound.color : PRESET_COLORS[0].color;
 }
 
 // 核心待办事项（支持关联多个人、单日或跨多天时间段）
@@ -94,6 +94,11 @@ export interface TodoItem {
   done: boolean;
   remindWechat?: boolean;
   createdAt: string;
+}
+
+// 防误删：回收站事项模型（携带删除时间戳）
+export interface DeletedTodoItem extends TodoItem {
+  deletedAt: string; // ISO 8601 删除时间
 }
 
 // 主视图：待办列表 | 日历视图
