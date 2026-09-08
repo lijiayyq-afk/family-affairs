@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { TodoItem, MemberItem, getMemberBadge } from '../../types';
 import { getTodayStr } from '../../utils/dateUtils';
-import { X, Trash2, Calendar, Bell, Check } from 'lucide-react';
+import { X, Trash2, Calendar, Check } from 'lucide-react';
 import { addDays, format, parseISO, differenceInCalendarDays } from 'date-fns';
 
 interface AffairModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (item: TodoItem, sendWechatNow: boolean) => void;
+  onSave: (item: TodoItem) => void;
   onDelete?: (id: string) => void;
   editingItem?: TodoItem | null;
   initialDate?: string;
@@ -35,7 +35,6 @@ export const AffairModal: React.FC<AffairModalProps> = ({
   const [isRangeMode, setIsRangeMode] = useState(false);
   const [startDate, setStartDate] = useState(initialDate || todayStr);
   const [endDate, setEndDate] = useState(initialDate || todayStr);
-  const [remindWechat, setRemindWechat] = useState(false);
 
   useEffect(() => {
     if (editingItem) {
@@ -46,7 +45,6 @@ export const AffairModal: React.FC<AffairModalProps> = ({
       const hasRange = Boolean(editingItem.endDate && editingItem.endDate > editingItem.date);
       setIsRangeMode(hasRange);
       setEndDate(editingItem.endDate || editingItem.date);
-      setRemindWechat(editingItem.remindWechat || false);
     } else {
       setTitle('');
       setSelectedMembers([defaultBadge]);
@@ -54,7 +52,6 @@ export const AffairModal: React.FC<AffairModalProps> = ({
       setStartDate(initD);
       setEndDate(initD);
       setIsRangeMode(false); // 默认一天
-      setRemindWechat(false);
     }
   }, [editingItem, initialDate, isOpen, todayStr, defaultBadge, members]);
 
@@ -83,11 +80,10 @@ export const AffairModal: React.FC<AffairModalProps> = ({
       date: startDate,
       endDate: isRangeMode && endDate > startDate ? endDate : undefined,
       done: editingItem ? editingItem.done : false,
-      remindWechat,
       createdAt: editingItem ? editingItem.createdAt : new Date().toISOString(),
     };
 
-    onSave(item, remindWechat);
+    onSave(item);
     onClose();
   };
 
@@ -352,19 +348,7 @@ export const AffairModal: React.FC<AffairModalProps> = ({
             )}
           </div>
 
-          {/* 微信通知开关 */}
-          <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-50 border border-zinc-100 text-xs">
-            <div className="flex items-center gap-2">
-              <Bell className="w-3.5 h-3.5 text-zinc-700" />
-              <span className="font-medium text-zinc-700">发送微信消息提醒</span>
-            </div>
-            <input
-              type="checkbox"
-              checked={remindWechat}
-              onChange={(e) => setRemindWechat(e.target.checked)}
-              className="w-4 h-4 accent-zinc-900 rounded-sm"
-            />
-          </div>
+
 
           {/* 底部按钮 */}
           <div className="pt-2 flex justify-end gap-2">

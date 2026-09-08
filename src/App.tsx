@@ -73,7 +73,7 @@ export function App() {
   const activeCount = useMemo(() => todos.filter((t) => !t.done).length, [todos]);
 
   // 保存事项（新增或修改）
-  const handleSaveItem = async (item: TodoItem, sendWechatNow: boolean) => {
+  const handleSaveItem = (item: TodoItem) => {
     setTodos((prev) => {
       const idx = prev.findIndex((t) => t.id === item.id);
       if (idx >= 0) {
@@ -85,15 +85,6 @@ export function App() {
     });
 
     showToast(editingItem ? '已修改' : '已记下');
-
-    if (sendWechatNow) {
-      const res = await PushPlusService.sendItem(item);
-      if (res.ok) {
-        showToast('已推送到微信');
-      } else {
-        showToast(res.msg, true);
-      }
-    }
   };
 
   // 打勾切换
@@ -107,16 +98,6 @@ export function App() {
   const handleDelete = (id: string) => {
     setTodos((prev) => prev.filter((t) => t.id !== id));
     showToast('已删除事项');
-  };
-
-  // 发送单条微信
-  const handleSendWechat = async (item: TodoItem) => {
-    const res = await PushPlusService.sendItem(item);
-    if (res.ok) {
-      showToast('已推送到微信');
-    } else {
-      showToast(res.msg, true);
-    }
   };
 
   return (
@@ -210,7 +191,6 @@ export function App() {
               setModalDate(undefined);
               setIsModalOpen(true);
             }}
-            onSendWechat={handleSendWechat}
             onOpenCreate={(date) => {
               setEditingItem(null);
               setModalDate(date);
@@ -235,7 +215,6 @@ export function App() {
             }}
             onToggleStatus={handleToggle}
             onDelete={handleDelete}
-            onSendWechat={handleSendWechat}
           />
         )}
       </main>

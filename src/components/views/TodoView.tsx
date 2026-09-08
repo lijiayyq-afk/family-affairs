@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { TodoItem, MemberItem, getMemberBadge, getMemberColor } from '../../types';
 import { formatTodoDateRange } from '../../utils/dateUtils';
-import { Check, Circle, Trash2, Bell, Plus } from 'lucide-react';
+import { Check, Circle, Trash2, Plus } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 interface TodoViewProps {
@@ -10,7 +10,6 @@ interface TodoViewProps {
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
   onEdit: (item: TodoItem) => void;
-  onSendWechat: (item: TodoItem) => void;
   onOpenCreate: (date?: string) => void;
 }
 
@@ -20,7 +19,6 @@ export const TodoView: React.FC<TodoViewProps> = ({
   onToggle,
   onDelete,
   onEdit,
-  onSendWechat,
   onOpenCreate,
 }) => {
   const [showDone, setShowDone] = useState(false);
@@ -129,21 +127,6 @@ export const TodoView: React.FC<TodoViewProps> = ({
           >
             {dateInfo.label}
           </span>
-
-          {/* 微信催办 */}
-          {!item.done && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onSendWechat(item);
-              }}
-              className="p-1.5 text-zinc-300 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition"
-              title="发送微信通知"
-            >
-              <Bell className="w-3.5 h-3.5" />
-            </button>
-          )}
 
           {/* 醒目的删除按钮 */}
           <button

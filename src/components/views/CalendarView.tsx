@@ -14,7 +14,7 @@ import {
   isSameDay,
   isToday,
 } from 'date-fns';
-import { ChevronLeft, ChevronRight, Plus, Check, Circle, Trash2, Bell, Calendar as CalendarIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Check, Circle, Trash2, Calendar as CalendarIcon } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 interface CalendarViewProps {
@@ -24,7 +24,6 @@ interface CalendarViewProps {
   onSelectEvent: (item: TodoItem) => void;
   onToggleStatus: (id: string) => void;
   onDelete: (id: string) => void;
-  onSendWechat: (item: TodoItem) => void;
 }
 
 export const CalendarView: React.FC<CalendarViewProps> = ({
@@ -34,7 +33,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   onSelectEvent,
   onToggleStatus,
   onDelete,
-  onSendWechat,
 }) => {
   // 当前浏览的年月
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -292,20 +290,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                         );
                       })}
                     </div>
-
-                    {!item.done && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onSendWechat(item);
-                        }}
-                        className="p-1.5 text-zinc-300 hover:text-emerald-700 rounded-lg hover:bg-emerald-50 transition"
-                        title="发送微信通知"
-                      >
-                        <Bell className="w-3.5 h-3.5" />
-                      </button>
-                    )}
 
                     <button
                       type="button"
