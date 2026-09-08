@@ -22,8 +22,7 @@ export default async function handler(req: any, res: any) {
 
   try {
     const { title, content, token: clientToken } = req.body || {};
-    // 优先使用 Vercel 环境变量中配置的 PUSHPLUS_TOKEN，无需在客户端明文保存
-    const token = process.env.PUSHPLUS_TOKEN || process.env.VITE_PUSHPLUS_TOKEN || clientToken;
+    const token = process.env.PUSHPLUS_TOKEN || process.env.VITE_PUSHPLUS_TOKEN || clientToken || '033a9f6a4ccf4c47ba595de163d37c14';
 
     if (!token) {
       res.status(400).json({ code: 400, msg: '未配置 PUSHPLUS_TOKEN 环境变量或 Token' });
