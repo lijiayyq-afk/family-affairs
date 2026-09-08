@@ -75,6 +75,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [activeTab, setActiveTab] = useState<SettingsTab>('members');
   const [sendingDigest, setSendingDigest] = useState(false);
   const [testingWechat, setTestingWechat] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 成员编辑/新增状态
@@ -170,8 +171,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   // 1. 微信早报
-  const [showPreview, setShowPreview] = useState(false);
-
   const handleSendTodayDigest = async () => {
     setSendingDigest(true);
     const res = await PushPlusService.sendTodayDigest(todos, members);

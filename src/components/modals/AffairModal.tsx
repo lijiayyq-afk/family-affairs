@@ -23,8 +23,6 @@ export const AffairModal: React.FC<AffairModalProps> = ({
   initialDate,
   members,
 }) => {
-  if (!isOpen) return null;
-
   const defaultBadge = members?.[0]?.badge || '佳';
   const todayStr = getTodayStr();
   const tomorrowStr = format(addDays(new Date(), 1), 'yyyy-MM-dd');
@@ -37,6 +35,7 @@ export const AffairModal: React.FC<AffairModalProps> = ({
   const [endDate, setEndDate] = useState(initialDate || todayStr);
 
   useEffect(() => {
+    if (!isOpen) return;
     if (editingItem) {
       setTitle(editingItem.title);
       const normalized = (editingItem.members || [defaultBadge]).map((m) => getMemberBadge(m, members));
@@ -54,6 +53,8 @@ export const AffairModal: React.FC<AffairModalProps> = ({
       setIsRangeMode(false); // 默认一天
     }
   }, [editingItem, initialDate, isOpen, todayStr, defaultBadge, members]);
+
+  if (!isOpen) return null;
 
   // 切换成员多选
   const handleToggleMember = (badge: string) => {

@@ -319,36 +319,40 @@ export function App() {
       </main>
 
       {/* 记事/编辑弹窗 */}
-      <AffairModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSave={handleSaveItem}
-        onDelete={handleDelete}
-        editingItem={editingItem}
-        initialDate={modalDate}
-        members={members}
-      />
+      {isModalOpen && (
+        <AffairModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          onSave={handleSaveItem}
+          onDelete={handleDelete}
+          editingItem={editingItem}
+          initialDate={modalDate}
+          members={members}
+        />
+      )}
 
       {/* 家庭设置与管理弹窗 (数据备份、微信早报、人员管理、防误删回收站) */}
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        todos={todos}
-        members={members}
-        deletedTodos={deletedTodos}
-        onUpdateMembers={(newMembers) => setMembers(newMembers)}
-        onImportSuccess={(newTodos, newMembers) => {
-          setTodos(newTodos);
-          if (newMembers && newMembers.length > 0) {
-            setMembers(newMembers);
-          }
-          setDeletedTodos(StorageService.getDeletedTodos());
-        }}
-        onRestoreTodo={handleRestoreTodo}
-        onClearRecycleBin={handleClearRecycleBin}
-        onPermanentDelete={handlePermanentDelete}
-        showToast={showToast}
-      />
+      {isSettingsOpen && (
+        <SettingsModal
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          todos={todos}
+          members={members}
+          deletedTodos={deletedTodos}
+          onUpdateMembers={(newMembers) => setMembers(newMembers)}
+          onImportSuccess={(newTodos, newMembers) => {
+            setTodos(newTodos);
+            if (newMembers && newMembers.length > 0) {
+              setMembers(newMembers);
+            }
+            setDeletedTodos(StorageService.getDeletedTodos());
+          }}
+          onRestoreTodo={handleRestoreTodo}
+          onClearRecycleBin={handleClearRecycleBin}
+          onPermanentDelete={handlePermanentDelete}
+          showToast={showToast}
+        />
+      )}
 
       {/* 底部轻量 Toast 提示 */}
       {toast && (
