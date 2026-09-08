@@ -5,7 +5,8 @@ import { PushPlusService } from './services/pushPlusService';
 import { TodoView } from './components/views/TodoView';
 import { CalendarView } from './components/views/CalendarView';
 import { AffairModal } from './components/modals/AffairModal';
-import { Plus, Sun, Check, AlertCircle } from 'lucide-react';
+import { BackupModal } from './components/modals/BackupModal';
+import { Plus, Sun, Check, AlertCircle, Database } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 export function App() {
@@ -14,6 +15,7 @@ export function App() {
 
   // 弹窗状态
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isBackupOpen, setIsBackupOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<TodoItem | null>(null);
   const [modalDate, setModalDate] = useState<string | undefined>();
 
@@ -133,13 +135,23 @@ export function App() {
             </button>
           </div>
 
-          {/* 右侧操作：发微信早报 + 记一笔 */}
-          <div className="flex items-center gap-2">
+          {/* 右侧操作：数据备份 + 发微信早报 + 记一笔 */}
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <button
+              type="button"
+              onClick={() => setIsBackupOpen(true)}
+              className="flex items-center gap-1 text-xs text-zinc-600 hover:text-zinc-900 bg-zinc-100 hover:bg-zinc-200/80 px-2 py-1.5 sm:px-2.5 rounded-xl transition"
+              title="数据备份与恢复"
+            >
+              <Database className="w-3.5 h-3.5 text-zinc-600" />
+              <span className="hidden sm:inline">备份</span>
+            </button>
+
             <button
               type="button"
               onClick={handleSendTodayDigest}
               disabled={sendingDigest}
-              className="flex items-center gap-1 text-xs text-zinc-600 hover:text-amber-800 bg-zinc-100 hover:bg-zinc-200/80 px-2.5 py-1.5 rounded-xl transition"
+              className="flex items-center gap-1 text-xs text-zinc-600 hover:text-amber-800 bg-zinc-100 hover:bg-zinc-200/80 px-2 py-1.5 sm:px-2.5 rounded-xl transition"
               title="发送今日早报至微信"
             >
               <Sun className="w-3.5 h-3.5 text-amber-600" />
@@ -211,6 +223,15 @@ export function App() {
         onDelete={handleDelete}
         editingItem={editingItem}
         initialDate={modalDate}
+      />
+
+      {/* 数据与备份弹窗 */}
+      <BackupModal
+        isOpen={isBackupOpen}
+        onClose={() => setIsBackupOpen(false)}
+        todos={todos}
+        onImportSuccess={(newTodos) => setTodos(newTodos)}
+        showToast={showToast}
       />
 
       {/* 底部轻量 Toast 提示 */}
