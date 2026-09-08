@@ -1,17 +1,19 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { TodoItem, ActiveTab } from './types';
 import { StorageService } from './services/storageService';
+import { SyncService, SyncStatus } from './services/syncService';
 import { PushPlusService } from './services/pushPlusService';
 import { TodoView } from './components/views/TodoView';
 import { CalendarView } from './components/views/CalendarView';
 import { AffairModal } from './components/modals/AffairModal';
 import { BackupModal } from './components/modals/BackupModal';
-import { Plus, Sun, Check, AlertCircle, Database } from 'lucide-react';
+import { Plus, Sun, Check, AlertCircle, Database, Cloud, RefreshCw } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 export function App() {
   const [todos, setTodos] = useState<TodoItem[]>(() => StorageService.getTodos());
   const [activeTab, setActiveTab] = useState<ActiveTab>('todos');
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
 
   // 弹窗状态
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -28,9 +30,39 @@ export function App() {
     }, 2500);
   }, []);
 
-  // 持久化
+  // 首屏挂载：静默自动拉取云端数据，多端智能合并
+  useEffect(() => {
+    let isMounted = true;
+    setSyncStatus('syncing');
+
+    SyncService.fetchCloudTodos().then((res) => {
+      if (!isMounted) return;
+      if (res.success && res.data) {
+        setTodos((localTodos) => {
+          const merged = SyncService.mergeTodos(localTodos, res.data!);
+          StorageService.saveTodos(merged);
+          // 若本地有云端没有的数据，顺手同步上云
+          if (merged.length !== res.data!.length) {
+            SyncService.triggerCloudSync(merged, setSyncStatus);
+          } else {
+            setSyncStatus('synced');
+          }
+          return merged;
+        });
+      } else {
+        setSyncStatus('idle');
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // 本地与云端持久化双写
   useEffect(() => {
     StorageService.saveTodos(todos);
+    SyncService.triggerCloudSync(todos, setSyncStatus);
   }, [todos]);
 
   const activeCount = useMemo(() => todos.filter((t) => !t.done).length, [todos]);
@@ -102,12 +134,24 @@ export function App() {
       {/* 顶部固定导航栏 */}
       <header className="sticky top-0 z-30 bg-[#faf9f6]/95 backdrop-blur-md border-b border-zinc-200/80 px-4 py-3">
         <div className="max-w-2xl mx-auto flex items-center justify-between gap-2">
-          {/* 标题 */}
-          <div className="flex items-center gap-2">
+          {/* 标题与云同步状态 */}
+          <div className="flex items-center gap-1.5">
             <span className="text-lg">🏡</span>
-            <span className="font-bold text-zinc-900 text-sm tracking-tight hidden sm:inline">
+            <span className="font-bold text-zinc-900 text-sm tracking-tight">
               家庭事务
             </span>
+            {syncStatus === 'syncing' && (
+              <span className="flex items-center gap-0.5 text-[10px] text-sky-600 bg-sky-50 px-1.5 py-0.5 rounded-full animate-pulse" title="正在与云端多设备同步">
+                <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                <span className="hidden sm:inline">同步中</span>
+              </span>
+            )}
+            {syncStatus === 'synced' && (
+              <span className="flex items-center gap-0.5 text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full" title="已与云端实时同步，跨设备互通">
+                <Cloud className="w-2.5 h-2.5" />
+                <span className="hidden sm:inline">已云同步</span>
+              </span>
+            )}
           </div>
 
           {/* 中间分段视图切换：待办清单 | 日历 */}

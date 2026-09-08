@@ -1,7 +1,8 @@
 import React, { useRef } from 'react';
 import { TodoItem } from '../../types';
 import { StorageService } from '../../services/storageService';
-import { X, Download, Upload, ShieldCheck, Database } from 'lucide-react';
+import { SyncService } from '../../services/syncService';
+import { X, Download, Upload, ShieldCheck, Database, Cloud, RefreshCw } from 'lucide-react';
 
 interface BackupModalProps {
   isOpen: boolean;
@@ -72,13 +73,27 @@ export const BackupModal: React.FC<BackupModalProps> = ({
 
         {/* 内容 */}
         <div className="p-5 space-y-4">
-          {/* 数据存储说明卡片 */}
+          {/* 云端跨设备实时同步卡片 */}
+          <div className="bg-sky-50/70 border border-sky-100 rounded-xl p-3.5 flex items-start gap-3">
+            <Cloud className="w-5 h-5 text-sky-600 shrink-0 mt-0.5" />
+            <div className="text-xs text-sky-950 space-y-1">
+              <div className="font-semibold flex items-center justify-between">
+                <span>跨设备多端云同步</span>
+                <span className="text-[10px] bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded-full font-normal">实时互通</span>
+              </div>
+              <p className="text-sky-800/90 leading-relaxed">
+                手机与电脑自动实时同步，所有数据加密存放在云端仓库中，换设备或更新版本永久不丢数据。
+              </p>
+            </div>
+          </div>
+
+          {/* 本地与云端备份卡片 */}
           <div className="bg-emerald-50/70 border border-emerald-100 rounded-xl p-3.5 flex items-start gap-3">
             <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
             <div className="text-xs text-emerald-950 space-y-1">
-              <div className="font-semibold">本地永久安全存储</div>
+              <div className="font-semibold">双重存储保障</div>
               <p className="text-emerald-700/90 leading-relaxed">
-                你的家庭数据保存在当前浏览器的永久本地数据库中，后续功能升级已锁定主键，绝不会被覆盖重置。
+                同时保留本地永久数据库与云端数据库，断网也能看，联网自动同步。
               </p>
             </div>
           </div>
@@ -91,6 +106,27 @@ export const BackupModal: React.FC<BackupModalProps> = ({
 
           {/* 操作按钮组 */}
           <div className="space-y-2 pt-1">
+            {/* 手动从云端重新拉取 */}
+            <button
+              type="button"
+              onClick={async () => {
+                showToast('正在从云端拉取最新数据...');
+                const res = await SyncService.fetchCloudTodos();
+                if (res.success && res.data) {
+                  const merged = SyncService.mergeTodos(todos, res.data);
+                  StorageService.saveTodos(merged);
+                  onImportSuccess(merged);
+                  showToast(`云端同步完成，共 ${merged.length} 条事项`);
+                } else {
+                  showToast(res.error || '云端同步失败', true);
+                }
+              }}
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 text-xs font-medium text-sky-800 bg-sky-50 hover:bg-sky-100/80 rounded-xl transition active:scale-98"
+            >
+              <RefreshCw className="w-4 h-4 text-sky-600" />
+              <span>从云端立即拉取最新数据</span>
+            </button>
+
             {/* 导出 */}
             <button
               type="button"
@@ -98,7 +134,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
               className="w-full flex items-center justify-center gap-2 py-2.5 px-4 text-xs font-medium text-zinc-800 bg-zinc-100 hover:bg-zinc-200/80 rounded-xl transition active:scale-98"
             >
               <Download className="w-4 h-4 text-zinc-600" />
-              <span>导出 JSON 数据备份到本地</span>
+              <span>导出 JSON 文件备份到本地</span>
             </button>
 
             {/* 导入 */}
@@ -122,7 +158,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
 
         {/* 底部 */}
         <div className="px-5 py-3 bg-zinc-50 border-t border-zinc-100 text-[11px] text-zinc-400 text-center">
-          换手机或换电脑时，可导出备份后在另一端导入恢复
+          手机电脑打开同一网址即可自动跨设备同步
         </div>
       </div>
     </div>
