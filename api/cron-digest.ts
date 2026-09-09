@@ -76,20 +76,24 @@ export default async function handler(req: any, res: any) {
   const ghToken = process.env.GH_SYNC_TOKEN || process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   const pushToken = process.env.PUSHPLUS_TOKEN || process.env.VITE_PUSHPLUS_TOKEN || DEFAULT_PUSHPLUS_TOKEN;
 
-  if (!gistId || !ghToken) {
-    res.status(500).json({ code: 500, msg: '未配置 GH_SYNC_TOKEN 环境变量，无法读取云端日程' });
+  if (!gistId) {
+    res.status(500).json({ code: 500, msg: '未指定云端 Gist ID' });
     return;
   }
 
   try {
-    // 1. 从 Gist 读取待办数据与成员数据
+    // 1. 从 Gist 读取待办数据与成员数据（公开 Gist 支持无 Token 安全读取）
+    const gistHeaders: Record<string, string> = {
+      Accept: 'application/vnd.github.v3+json',
+      'User-Agent': 'FamilyAffairsApp-CronDigest',
+    };
+    if (ghToken) {
+      gistHeaders.Authorization = `token ${ghToken}`;
+    }
+
     const gistRes = await fetch(`https://api.github.com/gists/${gistId}`, {
       method: 'GET',
-      headers: {
-        Authorization: `token ${ghToken}`,
-        Accept: 'application/vnd.github.v3+json',
-        'User-Agent': 'FamilyAffairsApp-CronDigest',
-      },
+      headers: gistHeaders,
     });
 
     if (!gistRes.ok) {
@@ -107,6 +111,20 @@ export default async function handler(req: any, res: any) {
         todos = JSON.parse(todosFile.content);
       } catch {}
     }
+
+    // 过滤掉任何历史残留的示例 mock
+    const MOCK_TITLES = new Set([
+      '陪爷爷去医院配慢病药',
+      '交家里水电气费',
+      '买家里的米面油和抽纸',
+    ]);
+    const MOCK_IDS = new Set(['1', '2', '3']);
+    todos = (Array.isArray(todos) ? todos : []).filter((t: any) => {
+      if (!t) return false;
+      const title = (t.title || '').trim();
+      const id = String(t.id || '');
+      return !(MOCK_IDS.has(id) && MOCK_TITLES.has(title)) && !MOCK_TITLES.has(title);
+    });
 
     let members: any[] = [];
     if (membersFile && membersFile.content) {

@@ -22,18 +22,20 @@ export default async function handler(req: any, res: any) {
   const gistId = process.env.SYNC_GIST_ID || DEFAULT_GIST_ID;
   const token = process.env.GH_SYNC_TOKEN || process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
 
-  if (!gistId || !token) {
-    res.status(500).json({ code: 500, msg: '未配置 GH_SYNC_TOKEN 环境变量，无法连接云端数据库' });
+  if (!gistId) {
+    res.status(500).json({ code: 500, msg: '未配置云端 Gist ID' });
     return;
   }
 
-  const headers = {
-    Authorization: `token ${token}`,
+  const headers: Record<string, string> = {
     Accept: 'application/vnd.github.v3+json',
     'User-Agent': 'FamilyAffairsApp-Serverless',
   };
+  if (token) {
+    headers.Authorization = `token ${token}`;
+  }
 
-  // GET: 读取云端所有事项与成员
+  // GET: 读取云端所有事项与成员（公开 Gist 免鉴权读取）
   if (req.method === 'GET') {
     try {
       const response = await fetch(`https://api.github.com/gists/${gistId}`, {
@@ -57,6 +59,20 @@ export default async function handler(req: any, res: any) {
         } catch {}
       }
 
+      // 彻底清洗过滤 mock 数据
+      const MOCK_TITLES = new Set([
+        '陪爷爷去医院配慢病药',
+        '交家里水电气费',
+        '买家里的米面油和抽纸',
+      ]);
+      const MOCK_IDS = new Set(['1', '2', '3']);
+      const cleanTodos = (Array.isArray(todos) ? todos : []).filter((t: any) => {
+        if (!t) return false;
+        const title = (t.title || '').trim();
+        const id = String(t.id || '');
+        return !(MOCK_IDS.has(id) && MOCK_TITLES.has(title)) && !MOCK_TITLES.has(title);
+      });
+
       let members = null;
       if (membersFile && membersFile.content) {
         try {
@@ -67,7 +83,7 @@ export default async function handler(req: any, res: any) {
       res.status(200).json({
         code: 200,
         data: {
-          todos: Array.isArray(todos) ? todos : [],
+          todos: cleanTodos,
           members: Array.isArray(members) ? members : null,
         },
       });
@@ -80,6 +96,10 @@ export default async function handler(req: any, res: any) {
 
   // POST / PUT: 写入保存事项与成员到云端
   if (req.method === 'POST' || req.method === 'PUT') {
+    if (!token) {
+      res.status(500).json({ code: 500, msg: '云端写入需配置 GH_SYNC_TOKEN 环境变量' });
+      return;
+    }
     try {
       let bodyData = req.body;
       if (typeof bodyData === 'string') {
