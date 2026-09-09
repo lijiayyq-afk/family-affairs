@@ -65,9 +65,30 @@ export function normalizeMembers(items: any[]): MemberItem[] {
   });
 }
 
+// 历史三条默认示例的特征特征库（彻底过滤，绝不再次塞入或复活）
+export const MOCK_TITLES = new Set([
+  '陪爷爷去医院配慢病药',
+  '交家里水电气费',
+  '买家里的米面油和抽纸',
+]);
+export const MOCK_IDS = new Set(['1', '2', '3']);
+
+export function isMockTodo(item: any): boolean {
+  if (!item) return false;
+  const title = (item.title || '').trim();
+  const id = String(item.id || '');
+  if (MOCK_IDS.has(id) && MOCK_TITLES.has(title)) return true;
+  if (MOCK_TITLES.has(title)) return true;
+  return false;
+}
+
 // 数据格式归一化清洗
 function normalizeTodos(items: any[]): TodoItem[] {
-  return items.map((item: any) => {
+  if (!Array.isArray(items)) return [];
+  // 彻底过滤掉任何历史残留的示例 mock 数据
+  const filtered = items.filter((item) => !isMockTodo(item));
+
+  return filtered.map((item: any) => {
     return {
       id: item.id || `todo_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       title: item.title || '未命名事项',
@@ -100,10 +121,9 @@ function normalizeDeletedTodos(items: any[]): DeletedTodoItem[] {
 export class StorageService {
   /**
    * 读取待办事项：
-   * 1. 优先读取永久主键 PRIMARY_KEY
-   * 2. 若为空，自动扫描所有历史键（v4/v3/v2/v1等）进行数据无缝抢救与自动迁移
-   * 3. 若用户曾经使用过（HAS_INITIALIZED_KEY为true），即使事项为空也绝不塞mock数据
-   * 4. 仅在有史以来第一次访问的全新浏览器中，才载入初始指引并标记初始化
+   * 1. 优先读取永久主键 PRIMARY_KEY（自动滤除历史残留 mock）
+   * 2. 若为空，扫描历史旧版本残留数据并清洗
+   * 3. 彻底禁用任何自动塞入 mock 数据的行为，无待办时直接保持空列表 []
    */
   static getTodos(): TodoItem[] {
     try {
@@ -112,42 +132,39 @@ export class StorageService {
       if (masterRaw) {
         const parsed = JSON.parse(masterRaw);
         if (Array.isArray(parsed)) {
-          return normalizeTodos(parsed);
+          const cleaned = normalizeTodos(parsed);
+          // 如果清洗掉了残留的 mock 数据，写回更新
+          if (cleaned.length !== parsed.length) {
+            this.saveTodos(cleaned);
+          }
+          return cleaned;
         }
       }
 
-      // 2. 检查是否有历史版本残留的数据，执行无缝抢救迁移
+      // 2. 检查是否有历史版本残留的数据，执行清洗与迁移
       for (const legacyKey of LEGACY_KEYS) {
         const legacyRaw = localStorage.getItem(legacyKey);
         if (legacyRaw) {
           try {
             const parsed = JSON.parse(legacyRaw);
-            if (Array.isArray(parsed) && parsed.length > 0) {
+            if (Array.isArray(parsed)) {
               const rescued = normalizeTodos(parsed);
-              // 立即迁移保存到永久主键中
               this.saveTodos(rescued);
               localStorage.setItem(HAS_INITIALIZED_KEY, 'true');
-              console.log(`[StorageService] 成功从 ${legacyKey} 抢救并迁移 ${rescued.length} 条数据！`);
+              // 清理历史残留键，防止再次触发
+              localStorage.removeItem(legacyKey);
               return rescued;
             }
           } catch {
-            // 继续尝试其他历史键
+            // ignore
           }
         }
       }
 
-      // 3. 检查是否已经初始化过（用户曾用过，但把事项都删完或办完了）
-      const hasInitialized = localStorage.getItem(HAS_INITIALIZED_KEY);
-      if (hasInitialized === 'true') {
-        // 用户已经使用过，保持空列表，绝对不塞入 mock 数据
-        return [];
-      }
-
-      // 4. 全新用户第一次打开：塞入少量初始示例，并立即标记已初始化
-      const initial = getInitialTodos();
-      this.saveTodos(initial);
+      // 3. 无论如何，初始化后不再向用户强塞任何 mock 数据
       localStorage.setItem(HAS_INITIALIZED_KEY, 'true');
-      return initial;
+      this.saveTodos([]);
+      return [];
     } catch (e) {
       console.error('[StorageService] 读取数据异常:', e);
       return [];

@@ -97,8 +97,13 @@ export function App() {
       if (!isMounted) return;
       if (res.success && res.data) {
         setTodos((localTodos) => {
-          const merged = SyncService.mergeTodos(localTodos, res.data!.todos);
+          const currentDeleted = StorageService.getDeletedTodos();
+          const merged = SyncService.mergeTodos(localTodos, res.data!.todos, currentDeleted);
           StorageService.saveTodos(merged);
+          // 若云端包含历史mock被清洗，立即反向推送到云端洗白云端数据
+          if (res.data!.todos.length !== merged.length) {
+            SyncService.triggerCloudSync(merged, members, setSyncStatus);
+          }
           return merged;
         });
 
