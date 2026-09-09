@@ -16,9 +16,14 @@ export class SyncService {
    */
   static async fetchCloudData(): Promise<{ success: boolean; data?: CloudDataPayload; error?: string }> {
     try {
-      const res = await fetch('/api/todos', {
+      const res = await fetch(`/api/todos?_t=${Date.now()}`, {
         method: 'GET',
-        headers: { 'Accept': 'application/json' },
+        cache: 'no-store',
+        headers: {
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+        },
       });
 
       if (!res.ok) {

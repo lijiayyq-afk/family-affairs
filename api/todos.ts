@@ -13,6 +13,10 @@ export default async function handler(req: any, res: any) {
     'Access-Control-Allow-Headers',
     'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
   );
+  // 严格禁用所有层级的缓存，确保多设备秒级同步真实生效
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
 
   if (req.method === 'OPTIONS') {
     res.status(200).end();

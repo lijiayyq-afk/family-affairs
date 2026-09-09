@@ -72,6 +72,7 @@ export function App() {
   const [deletedTodos, setDeletedTodos] = useState<DeletedTodoItem[]>(() => StorageService.getDeletedTodos());
   const [activeTab, setActiveTab] = useState<ActiveTab>('todos');
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
+  const isInitialLoadCompleted = React.useRef(false);
 
   // 弹窗状态
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -88,22 +89,16 @@ export function App() {
     }, 2500);
   }, []);
 
-  // 首屏挂载：静默自动拉取云端数据，多端智能合并待办与家庭成员
-  useEffect(() => {
-    let isMounted = true;
+  // 核心拉取函数：从云端静默拉取最新事项与成员并智能合并
+  const pullLatestFromCloud = useCallback(async (isManual = false) => {
     setSyncStatus('syncing');
-
-    SyncService.fetchCloudData().then((res) => {
-      if (!isMounted) return;
+    try {
+      const res = await SyncService.fetchCloudData();
       if (res.success && res.data) {
         setTodos((localTodos) => {
           const currentDeleted = StorageService.getDeletedTodos();
           const merged = SyncService.mergeTodos(localTodos, res.data!.todos, currentDeleted);
           StorageService.saveTodos(merged);
-          // 若云端包含历史mock被清洗，立即反向推送到云端洗白云端数据
-          if (res.data!.todos.length !== merged.length) {
-            SyncService.triggerCloudSync(merged, members, setSyncStatus);
-          }
           return merged;
         });
 
@@ -116,21 +111,62 @@ export function App() {
         }
 
         setSyncStatus('synced');
+        if (isManual) {
+          showToast(`已从云端同步最新数据 (共 ${res.data.todos.length} 条待办)`);
+        }
       } else {
-        setSyncStatus('idle');
+        setSyncStatus(isManual ? 'error' : 'idle');
+        if (isManual) {
+          showToast(res.error || '云端拉取失败', true);
+        }
       }
-    });
+    } catch {
+      setSyncStatus(isManual ? 'error' : 'idle');
+    } finally {
+      isInitialLoadCompleted.current = true;
+    }
+  }, [showToast]);
+
+  // 触点1：首屏挂载自动从云端静默拉取
+  useEffect(() => {
+    pullLatestFromCloud();
+  }, [pullLatestFromCloud]);
+
+  // 触点2：多设备实时感知（窗口聚焦、页面可见性改变、15秒心跳轮询）
+  useEffect(() => {
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        pullLatestFromCloud();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+
+    // 页面在前台激活时，每 15 秒自动静默轮询一次云端，手机端刚记的事项电脑端秒同步
+    const intervalTimer = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        pullLatestFromCloud();
+      }
+    }, 15000);
 
     return () => {
-      isMounted = false;
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      clearInterval(intervalTimer);
     };
-  }, []);
+  }, [pullLatestFromCloud]);
 
   // 本地与云端持久化双写（待办与家庭成员）
   useEffect(() => {
+    // 本地始终实时保存
     StorageService.saveTodos(todos);
     StorageService.saveMembers(members);
-    SyncService.triggerCloudSync(todos, members, setSyncStatus);
+
+    // 关键防覆盖守卫：只有在首屏从云端拉取完成之后，后续的数据变更才上推云端，绝不拿本地旧数据回冲云端
+    if (isInitialLoadCompleted.current) {
+      SyncService.triggerCloudSync(todos, members, setSyncStatus);
+    }
   }, [todos, members]);
 
   // 回收站数据本地持久化
@@ -215,18 +251,36 @@ export function App() {
             <span className="font-bold text-zinc-900 text-sm tracking-tight">
               家庭事务
             </span>
-            {syncStatus === 'syncing' && (
-              <span className="flex items-center gap-0.5 text-[10px] text-sky-600 bg-sky-50 px-1.5 py-0.5 rounded-full animate-pulse" title="正在与云端多设备同步">
-                <RefreshCw className="w-2.5 h-2.5 animate-spin" />
-                <span className="hidden sm:inline">同步中</span>
-              </span>
-            )}
-            {syncStatus === 'synced' && (
-              <span className="flex items-center gap-0.5 text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full" title="已与云端实时同步，跨设备互通">
-                <Cloud className="w-2.5 h-2.5" />
-                <span className="hidden sm:inline">已云同步</span>
-              </span>
-            )}
+            {/* 可点击的一键云同步刷新按钮 */}
+            <button
+              type="button"
+              onClick={() => pullLatestFromCloud(true)}
+              className={`flex items-center gap-1 text-[10px] sm:text-xs px-2 py-0.5 rounded-full border transition active:scale-95 cursor-pointer ${
+                syncStatus === 'syncing'
+                  ? 'text-sky-700 bg-sky-50 border-sky-200'
+                  : syncStatus === 'error'
+                  ? 'text-rose-700 bg-rose-50 border-rose-200 hover:bg-rose-100'
+                  : 'text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100'
+              }`}
+              title="点击立即从云端刷新最新事项（跨设备实时互通）"
+            >
+              {syncStatus === 'syncing' ? (
+                <>
+                  <RefreshCw className="w-2.5 h-2.5 animate-spin text-sky-600" />
+                  <span className="hidden sm:inline">同步中</span>
+                </>
+              ) : syncStatus === 'error' ? (
+                <>
+                  <RefreshCw className="w-2.5 h-2.5 text-rose-600" />
+                  <span>同步重试</span>
+                </>
+              ) : (
+                <>
+                  <Cloud className="w-2.5 h-2.5 text-emerald-600" />
+                  <span className="hidden sm:inline">已云同步</span>
+                </>
+              )}
+            </button>
           </div>
 
           {/* 中间分段视图切换：待办清单 | 日历 */}
